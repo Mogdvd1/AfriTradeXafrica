@@ -18,6 +18,15 @@ import {
   Shield,
   Plus
 } from 'lucide-react';
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer 
+} from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import Logo from '../components/Logo';
 import TwoFactorModal from '../components/TwoFactorModal';
@@ -27,6 +36,15 @@ const stats = [
   { name: 'Verified Miners', value: '450', change: '+8.2%', icon: Users, color: 'text-blue-400' },
   { name: 'Active Escrows', value: '24', change: '-2.4%', icon: ShieldCheck, color: 'text-green-400' },
   { name: 'Compliance Score', value: '98%', change: '+1.5%', icon: CheckCircle2, color: 'text-gold' },
+];
+
+const chartData = [
+  { month: 'Oct', volume: 450000 },
+  { month: 'Nov', volume: 520000 },
+  { month: 'Dec', volume: 480000 },
+  { month: 'Jan', volume: 610000 },
+  { month: 'Feb', volume: 750000 },
+  { month: 'Mar', volume: 1200000 },
 ];
 
 const recentTrades = [
@@ -165,6 +183,65 @@ export default function Dashboard() {
                   <p className="text-3xl font-bold text-white mt-1">{stat.value}</p>
                 </motion.div>
               ))}
+            </div>
+
+            {/* Trade Volume Chart */}
+            <div className="glass-card p-8 border-white/5">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-xl font-bold text-white">Trade Volume Trend</h2>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-gold" />
+                    <span className="text-xs text-soft-grey">Monthly Volume (USD)</span>
+                  </div>
+                </div>
+              </div>
+              <div className="h-[300px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="colorVolume" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#D4AF37" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#D4AF37" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                    <XAxis 
+                      dataKey="month" 
+                      stroke="#8E9299" 
+                      fontSize={12} 
+                      tickLine={false} 
+                      axisLine={false}
+                      dy={10}
+                    />
+                    <YAxis 
+                      stroke="#8E9299" 
+                      fontSize={12} 
+                      tickLine={false} 
+                      axisLine={false}
+                      tickFormatter={(value) => `$${value / 1000}k`}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#151619', 
+                        border: '1px solid #ffffff10',
+                        borderRadius: '8px',
+                        fontSize: '12px'
+                      }}
+                      itemStyle={{ color: '#D4AF37' }}
+                      formatter={(value: number) => [`$${value.toLocaleString()}`, 'Volume']}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="volume" 
+                      stroke="#D4AF37" 
+                      strokeWidth={3}
+                      fillOpacity={1} 
+                      fill="url(#colorVolume)" 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
             {/* Main Grid */}
