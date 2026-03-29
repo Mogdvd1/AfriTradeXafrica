@@ -34,11 +34,14 @@ export default function Layout({ children }: LayoutProps) {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-jet-black/80 backdrop-blur-lg border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-gold rounded-lg flex items-center justify-center">
-              <span className="text-jet-black font-black text-xl">A</span>
-            </div>
-            <span className="text-2xl font-black tracking-tighter text-white">
+          <Link to="/" className="flex items-center gap-3">
+            <img 
+              src="https://images.unsplash.com/photo-1635405074683-96d6921a2a2c?auto=format&fit=crop&q=80&w=100" 
+              alt="AfriTradeX Logo" 
+              className="w-10 h-10 object-contain"
+              referrerPolicy="no-referrer"
+            />
+            <span className="text-2xl font-black tracking-tighter text-white hidden sm:block">
               AfriTrade<span className="text-gold">X</span>
             </span>
           </Link>
@@ -56,6 +59,9 @@ export default function Layout({ children }: LayoutProps) {
                 {link.name}
               </Link>
             ))}
+            <Link to="/login" className="text-sm font-bold text-gold hover:text-white transition-colors">
+              Login
+            </Link>
             <Link to="/onboarding" className="btn-primary py-2 px-4 text-xs lg:text-sm">
               Get Started
             </Link>
@@ -94,6 +100,9 @@ export default function Layout({ children }: LayoutProps) {
                 <Link to="/onboarding" className="btn-primary w-full mt-4">
                   Get Started
                 </Link>
+                <Link to="/login" className="btn-secondary w-full">
+                  Login to Dashboard
+                </Link>
               </div>
             </motion.div>
           )}
@@ -109,10 +118,13 @@ export default function Layout({ children }: LayoutProps) {
       <footer className="bg-jet-black border-t border-white/5 pt-20 pb-10">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12 text-center sm:text-left">
           <div className="space-y-6 flex flex-col items-center sm:items-start">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gold rounded flex items-center justify-center">
-                <span className="text-jet-black font-black text-lg">A</span>
-              </div>
+            <Link to="/" className="flex items-center gap-3">
+              <img 
+                src="https://images.unsplash.com/photo-1635405074683-96d6921a2a2c?auto=format&fit=crop&q=80&w=100" 
+                alt="AfriTradeX Logo" 
+                className="w-8 h-8 object-contain"
+                referrerPolicy="no-referrer"
+              />
               <span className="text-xl font-bold text-white">AfriTradeX</span>
             </Link>
             <p className="text-soft-grey text-sm leading-relaxed max-w-xs">

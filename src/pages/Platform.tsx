@@ -43,8 +43,21 @@ export default function Platform() {
   return (
     <div className="flex flex-col">
       {/* Hero */}
-      <section className="bg-jet-black py-24 px-6 border-b border-white/5">
-        <div className="max-w-7xl mx-auto text-center">
+      <section className="bg-jet-black py-24 px-6 border-b border-white/5 relative overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-gold/5 rounded-full blur-[120px] pointer-events-none" />
+        <div className="max-w-7xl mx-auto text-center relative z-10">
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex justify-center mb-12"
+          >
+            <img 
+              src="https://images.unsplash.com/photo-1635405074683-96d6921a2a2c?auto=format&fit=crop&q=80&w=200" 
+              alt="AfriTradeX Logo" 
+              className="w-32 h-32 md:w-48 md:h-48 object-contain drop-shadow-[0_0_30px_rgba(244,196,48,0.3)]"
+              referrerPolicy="no-referrer"
+            />
+          </motion.div>
           <motion.h1 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
