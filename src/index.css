@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme {
+  --color-gold: #F4C430;
+  --color-gold-deep: #D4AF37;
+  --color-jet-black: #0B0B0B;
+  --color-charcoal: #1A1A1A;
+  --color-soft-grey: #B8B8B8;
+  --color-trust-green: #2FA84F;
+  --color-network-blue: #1E63B6;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-jet-black text-white font-sans antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold tracking-tight;
+  }
+}
+
+.glass-card {
+  @apply bg-charcoal/50 backdrop-blur-md border border-white/10 rounded-xl;
+}
+
+.btn-primary {
+  @apply bg-gold hover:bg-gold-deep text-jet-black font-bold py-3 px-6 rounded-lg transition-all duration-200 inline-flex items-center justify-center gap-2;
+}
+
+.btn-secondary {
+  @apply border-2 border-gold text-gold hover:bg-gold hover:text-jet-black font-bold py-3 px-6 rounded-lg transition-all duration-200 inline-flex items-center justify-center gap-2;
+}
+
+.section-padding {
+  @apply py-20 px-6 md:px-12 lg:px-24;
+}
+
+.text-gradient {
+  @apply bg-clip-text text-transparent bg-gradient-to-r from-gold to-gold-deep;
+}
