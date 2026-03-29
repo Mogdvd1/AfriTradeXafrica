@@ -12,6 +12,7 @@ import Contact from './pages/Contact';
 import Onboarding from './pages/Onboarding';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Terms from './pages/Terms';
 
 function AppContent() {
   const location = useLocation();
@@ -39,6 +40,7 @@ function AppContent() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/terms" element={<Terms />} />
       </Routes>
     </Layout>
   );

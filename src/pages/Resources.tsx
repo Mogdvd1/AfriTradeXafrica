@@ -2,6 +2,10 @@ import { motion } from 'motion/react';
 import { BookOpen, Shield, FileText, Layout, Info, CheckCircle2 } from 'lucide-react';
 
 export default function Resources() {
+  const handleDownload = (title: string) => {
+    alert(`Downloading: ${title}...`);
+  };
+
   const resources = [
     { title: 'Grading and Pricing Basics', icon: <Layout /> },
     { title: 'Safety Checklists', icon: <Shield /> },
@@ -34,7 +38,11 @@ export default function Resources() {
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {resources.map((r, i) => (
-              <div key={i} className="glass-card p-10 hover:border-gold/40 transition-all cursor-pointer group">
+              <div 
+                key={i} 
+                onClick={() => handleDownload(r.title)}
+                className="glass-card p-10 hover:border-gold/40 transition-all cursor-pointer group"
+              >
                 <div className="w-14 h-14 bg-gold/10 rounded-xl flex items-center justify-center text-gold mb-8 group-hover:scale-110 transition-transform">
                   {r.icon}
                 </div>

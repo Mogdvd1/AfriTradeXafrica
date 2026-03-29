@@ -1,7 +1,23 @@
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Mail, Phone, MapPin, Send, MessageSquare, Handshake, Play } from 'lucide-react';
 
 export default function Contact() {
+  const location = useLocation();
+  const [subject, setSubject] = useState('General Inquiry');
+
+  useEffect(() => {
+    if (location.state?.initialSubject) {
+      setSubject(location.state.initialSubject);
+    }
+  }, [location.state]);
+
+  const handleQuickAction = (newSubject: string) => {
+    setSubject(newSubject);
+    window.scrollTo({ top: document.getElementById('contact-form')?.offsetTop ? document.getElementById('contact-form')!.offsetTop - 100 : 0, behavior: 'smooth' });
+  };
+
   return (
     <div className="flex flex-col">
       {/* Header */}
@@ -68,15 +84,24 @@ export default function Contact() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <button className="btn-primary py-4 px-2 text-xs flex flex-col items-center gap-2">
+              <button 
+                onClick={() => handleQuickAction('Training Request')}
+                className="btn-primary py-4 px-2 text-xs flex flex-col items-center gap-2"
+              >
                 <MessageSquare size={20} />
                 Request Training
               </button>
-              <button className="btn-primary py-4 px-2 text-xs flex flex-col items-center gap-2">
+              <button 
+                onClick={() => handleQuickAction('Platform Demo')}
+                className="btn-primary py-4 px-2 text-xs flex flex-col items-center gap-2"
+              >
                 <Play size={20} />
                 Book a Demo
               </button>
-              <button className="btn-primary py-4 px-2 text-xs flex flex-col items-center gap-2">
+              <button 
+                onClick={() => handleQuickAction('Partnership Proposal')}
+                className="btn-primary py-4 px-2 text-xs flex flex-col items-center gap-2"
+              >
                 <Handshake size={20} />
                 Partner With Us
               </button>
@@ -84,7 +109,7 @@ export default function Contact() {
           </div>
 
           {/* Contact Form */}
-          <div className="glass-card p-10">
+          <div id="contact-form" className="glass-card p-10">
             <h3 className="text-2xl font-bold mb-8">Send us a Message</h3>
             <form className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -99,7 +124,11 @@ export default function Contact() {
               </div>
               <div className="space-y-2">
                 <label className="text-xs text-soft-grey uppercase tracking-widest">Subject</label>
-                <select className="w-full bg-jet-black border border-white/10 rounded-lg p-4 focus:border-gold outline-none transition-colors appearance-none">
+                <select 
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  className="w-full bg-jet-black border border-white/10 rounded-lg p-4 focus:border-gold outline-none transition-colors appearance-none"
+                >
                   <option>General Inquiry</option>
                   <option>Platform Demo</option>
                   <option>Training Request</option>

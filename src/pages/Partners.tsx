@@ -1,4 +1,5 @@
 import { motion } from 'motion/react';
+import { Link } from 'react-router-dom';
 import { Handshake, Building2, FlaskConical, Truck, Users, Landmark } from 'lucide-react';
 
 export default function Partners() {
@@ -54,7 +55,9 @@ export default function Partners() {
           <p className="text-soft-grey text-lg mb-12">
             Whether you're a buyer, lab, cooperative, or institution, we welcome collaboration to expand safe and compliant mineral trade.
           </p>
-          <button className="btn-primary px-12 py-4 text-lg">Become a Partner</button>
+          <Link to="/onboarding" className="btn-primary px-12 py-4 text-lg">
+            Become a Partner
+          </Link>
         </div>
       </section>
     </div>

@@ -55,8 +55,8 @@ export default function About() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <img src="https://images.unsplash.com/photo-1516937941344-00b4e0337589?auto=format&fit=crop&q=80&w=500" alt="Mining 1" className="rounded-2xl w-full h-64 object-cover" referrerPolicy="no-referrer" />
-            <img src="https://images.unsplash.com/photo-1519452635265-7b1fbfd1e4e0?auto=format&fit=crop&q=80&w=500" alt="Mining 2" className="rounded-2xl w-full h-64 object-cover mt-8" referrerPolicy="no-referrer" />
+            <img src="https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?auto=format&fit=crop&q=80&w=500" alt="Mining 1" className="rounded-2xl w-full h-64 object-cover" referrerPolicy="no-referrer" />
+            <img src="https://images.unsplash.com/photo-1573164713988-8665fc963095?auto=format&fit=crop&q=80&w=500" alt="Mining 2" className="rounded-2xl w-full h-64 object-cover mt-8" referrerPolicy="no-referrer" />
           </div>
         </div>
       </section>

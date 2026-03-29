@@ -1,21 +1,29 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
+import { Lock, Mail, ArrowRight, AlertCircle, Shield } from 'lucide-react';
+import Logo from '../components/Logo';
+import TwoFactorModal from '../components/TwoFactorModal';
 
 export default function Login() {
   const [email, setEmail] = useState('admin@afritradex.com');
   const [password, setPassword] = useState('password123');
   const [error, setError] = useState('');
+  const [is2FAOpen, setIs2FAOpen] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (email === 'admin@afritradex.com' && password === 'password123') {
-      navigate('/dashboard');
+      setIs2FAOpen(true);
     } else {
       setError('Invalid email or password. Use the sample credentials provided.');
     }
+  };
+
+  const handle2FAVerify = () => {
+    setIs2FAOpen(false);
+    navigate('/dashboard');
   };
 
   return (
@@ -26,12 +34,9 @@ export default function Login() {
         className="max-w-md w-full glass-card p-10 border-gold/20"
       >
         <div className="text-center mb-10">
-          <img 
-            src="https://images.unsplash.com/photo-1635405074683-96d6921a2a2c?auto=format&fit=crop&q=80&w=100" 
-            alt="AfriTradeX Logo" 
-            className="w-16 h-16 mx-auto mb-6 object-contain"
-            referrerPolicy="no-referrer"
-          />
+          <div className="flex justify-center mb-6">
+            <Logo className="w-16 h-16" iconSize={32} showText={false} />
+          </div>
           <h1 className="text-3xl font-bold mb-2">Welcome Back</h1>
           <p className="text-soft-grey text-sm">Login to your AfriTradeX Dashboard</p>
         </div>
@@ -42,6 +47,9 @@ export default function Login() {
           </p>
           <p className="text-sm text-soft-grey">Email: <span className="text-white">admin@afritradex.com</span></p>
           <p className="text-sm text-soft-grey">Password: <span className="text-white">password123</span></p>
+          <p className="text-xs text-gold mt-2 flex items-center gap-1">
+            <Shield size={10} /> 2FA Code: 123456
+          </p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
@@ -88,9 +96,16 @@ export default function Login() {
         </form>
 
         <p className="text-center mt-8 text-sm text-soft-grey">
-          Don't have an account? <a href="/onboarding" className="text-gold hover:underline">Get Started</a>
+          Don't have an account? <Link to="/onboarding" className="text-gold hover:underline">Get Started</Link>
         </p>
       </motion.div>
+
+      <TwoFactorModal 
+        isOpen={is2FAOpen}
+        onClose={() => setIs2FAOpen(false)}
+        onVerify={handle2FAVerify}
+        description="A 6-digit verification code has been sent to your registered mobile device."
+      />
     </div>
   );
 }

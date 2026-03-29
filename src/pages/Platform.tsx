@@ -1,5 +1,7 @@
 import { motion } from 'motion/react';
 import { Shield, Lock, FileText, BarChart3, Users, CheckCircle2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import Logo from '../components/Logo';
 
 export default function Platform() {
   const features = [
@@ -51,12 +53,7 @@ export default function Platform() {
             animate={{ opacity: 1, y: 0 }}
             className="flex justify-center mb-12"
           >
-            <img 
-              src="https://images.unsplash.com/photo-1635405074683-96d6921a2a2c?auto=format&fit=crop&q=80&w=200" 
-              alt="AfriTradeX Logo" 
-              className="w-32 h-32 md:w-48 md:h-48 object-contain drop-shadow-[0_0_30px_rgba(244,196,48,0.3)]"
-              referrerPolicy="no-referrer"
-            />
+            <Logo className="w-32 h-32 md:w-48 md:h-48" iconSize={64} showText={false} />
           </motion.div>
           <motion.h1 
             initial={{ opacity: 0, scale: 0.95 }}
@@ -168,8 +165,16 @@ export default function Platform() {
         <div className="max-w-4xl mx-auto glass-card p-16 border-gold/30">
           <h2 className="text-4xl font-bold mb-8">Ready to transform your mineral trade?</h2>
           <div className="flex flex-col sm:flex-row justify-center gap-6">
-            <button className="btn-primary px-12 py-4 text-lg">Book a Demo</button>
-            <button className="btn-secondary px-12 py-4 text-lg">Join AfriTradeX</button>
+            <Link 
+              to="/contact" 
+              state={{ initialSubject: 'Platform Demo' }}
+              className="btn-primary px-12 py-4 text-lg"
+            >
+              Book a Demo
+            </Link>
+            <Link to="/onboarding" className="btn-secondary px-12 py-4 text-lg">
+              Join AfriTradeX
+            </Link>
           </div>
         </div>
       </section>

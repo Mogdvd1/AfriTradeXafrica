@@ -1,4 +1,5 @@
 import { motion } from 'motion/react';
+import { Link } from 'react-router-dom';
 import { Globe, ShieldCheck, Truck, FlaskConical, BarChart, CheckCircle2 } from 'lucide-react';
 
 export default function EthicalSourcing() {
@@ -91,9 +92,12 @@ export default function EthicalSourcing() {
       <section className="section-padding bg-gold text-jet-black text-center">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-4xl font-black mb-8">Ready to source ethically?</h2>
-          <button className="bg-jet-black text-white font-bold py-4 px-12 rounded-xl hover:scale-105 transition-all">
+          <Link 
+            to="/onboarding" 
+            className="inline-block bg-jet-black text-white font-bold py-4 px-12 rounded-xl hover:scale-105 transition-all"
+          >
             Register as a Buyer
-          </button>
+          </Link>
         </div>
       </section>
     </div>

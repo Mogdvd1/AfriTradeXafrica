@@ -44,14 +44,14 @@ export default function ESG() {
               </ul>
             </div>
             <div className="order-1 lg:order-2 rounded-3xl overflow-hidden">
-              <img src="https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=1000" alt="Environmental" className="w-full h-96 object-cover" referrerPolicy="no-referrer" />
+              <img src="https://images.unsplash.com/photo-1547471080-7cc2caa01a7e?auto=format&fit=crop&q=80&w=1000" alt="Environmental" className="w-full h-96 object-cover" referrerPolicy="no-referrer" />
             </div>
           </div>
 
           {/* Social */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
             <div className="rounded-3xl overflow-hidden">
-              <img src="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&q=80&w=1000" alt="Social" className="w-full h-96 object-cover" referrerPolicy="no-referrer" />
+              <img src="https://images.unsplash.com/photo-1523805081730-614449379e7d?auto=format&fit=crop&q=80&w=1000" alt="Social" className="w-full h-96 object-cover" referrerPolicy="no-referrer" />
             </div>
             <div>
               <div className="w-16 h-16 bg-gold/10 rounded-2xl flex items-center justify-center text-gold mb-8">
@@ -95,7 +95,7 @@ export default function ESG() {
               </ul>
             </div>
             <div className="order-1 lg:order-2 rounded-3xl overflow-hidden">
-              <img src="https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&q=80&w=1000" alt="Governance" className="w-full h-96 object-cover" referrerPolicy="no-referrer" />
+              <img src="https://images.unsplash.com/photo-1573164713988-8665fc963095?auto=format&fit=crop&q=80&w=1000" alt="Governance" className="w-full h-96 object-cover" referrerPolicy="no-referrer" />
             </div>
           </div>
         </div>

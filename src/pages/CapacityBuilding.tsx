@@ -1,7 +1,31 @@
-import { motion } from 'motion/react';
-import { ShieldAlert, Leaf, BookOpen, FileCheck, Lock, CheckCircle2 } from 'lucide-react';
+import { useState, FormEvent } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { ShieldAlert, Leaf, BookOpen, FileCheck, Lock, CheckCircle2, X, Send, CheckCircle } from 'lucide-react';
 
 export default function CapacityBuilding() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    cooperative: '',
+    location: '',
+    message: ''
+  });
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    // Simulate API call
+    setTimeout(() => {
+      setIsSubmitted(true);
+      setTimeout(() => {
+        setIsSubmitted(false);
+        setIsModalOpen(false);
+        setFormData({ name: '', email: '', cooperative: '', location: '', message: '' });
+      }, 3000);
+    }, 1000);
+  };
+
   const programs = [
     {
       title: 'Safety & HSE / SHEQ',
@@ -93,7 +117,7 @@ export default function CapacityBuilding() {
             </div>
             <div className="rounded-3xl overflow-hidden border border-white/10">
               <img 
-                src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&q=80&w=1000" 
+                src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=1000" 
                 alt="Training session" 
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
@@ -107,11 +131,122 @@ export default function CapacityBuilding() {
       <section className="section-padding bg-gold text-jet-black text-center">
         <div className="max-w-3xl mx-auto">
           <h2 className="text-4xl font-black mb-8">Empower your cooperative today.</h2>
-          <button className="bg-jet-black text-white font-bold py-4 px-12 rounded-xl hover:scale-105 transition-all">
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-jet-black text-white font-bold py-4 px-12 rounded-xl hover:scale-105 transition-all"
+          >
             Request Training for Your Cooperative
           </button>
         </div>
       </section>
+
+      {/* Training Request Modal */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)}
+              className="absolute inset-0 bg-jet-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-lg bg-charcoal border border-white/10 rounded-3xl p-8 shadow-2xl overflow-hidden"
+            >
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="absolute top-6 right-6 text-soft-grey hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+
+              {isSubmitted ? (
+                <div className="py-12 text-center">
+                  <div className="w-20 h-20 bg-trust-green/10 rounded-full flex items-center justify-center text-trust-green mx-auto mb-6">
+                    <CheckCircle size={48} />
+                  </div>
+                  <h3 className="text-2xl font-bold mb-4">Request Sent!</h3>
+                  <p className="text-soft-grey">
+                    Thank you for your interest. Our team will contact you shortly to discuss your cooperative's training needs.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <h3 className="text-2xl font-bold mb-2">Request Training</h3>
+                  <p className="text-soft-grey text-sm mb-8">Fill out the form below and we'll get back to you with a tailored training plan.</p>
+                  
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase tracking-widest text-soft-grey font-bold">Your Name</label>
+                        <input 
+                          required
+                          type="text" 
+                          value={formData.name}
+                          onChange={(e) => setFormData({...formData, name: e.target.value})}
+                          className="w-full bg-jet-black border border-white/10 rounded-xl p-3 text-sm focus:border-gold outline-none transition-colors" 
+                          placeholder="Full Name" 
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] uppercase tracking-widest text-soft-grey font-bold">Email</label>
+                        <input 
+                          required
+                          type="email" 
+                          value={formData.email}
+                          onChange={(e) => setFormData({...formData, email: e.target.value})}
+                          className="w-full bg-jet-black border border-white/10 rounded-xl p-3 text-sm focus:border-gold outline-none transition-colors" 
+                          placeholder="email@example.com" 
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase tracking-widest text-soft-grey font-bold">Cooperative Name</label>
+                      <input 
+                        required
+                        type="text" 
+                        value={formData.cooperative}
+                        onChange={(e) => setFormData({...formData, cooperative: e.target.value})}
+                        className="w-full bg-jet-black border border-white/10 rounded-xl p-3 text-sm focus:border-gold outline-none transition-colors" 
+                        placeholder="Name of your cooperative" 
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase tracking-widest text-soft-grey font-bold">Location (District/Province)</label>
+                      <input 
+                        required
+                        type="text" 
+                        value={formData.location}
+                        onChange={(e) => setFormData({...formData, location: e.target.value})}
+                        className="w-full bg-jet-black border border-white/10 rounded-xl p-3 text-sm focus:border-gold outline-none transition-colors" 
+                        placeholder="e.g. Solwezi, North-Western" 
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase tracking-widest text-soft-grey font-bold">Specific Needs (Optional)</label>
+                      <textarea 
+                        rows={3}
+                        value={formData.message}
+                        onChange={(e) => setFormData({...formData, message: e.target.value})}
+                        className="w-full bg-jet-black border border-white/10 rounded-xl p-3 text-sm focus:border-gold outline-none transition-colors resize-none" 
+                        placeholder="Tell us about your specific training requirements..." 
+                      />
+                    </div>
+                    <button type="submit" className="btn-primary w-full py-4 mt-4">
+                      Submit Request
+                      <Send size={18} />
+                    </button>
+                  </form>
+                </>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

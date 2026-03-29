@@ -10,7 +10,7 @@ export default function Home() {
         <div className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-gradient-to-r from-jet-black via-jet-black/80 to-transparent z-10" />
           <img 
-            src="https://images.unsplash.com/photo-1519452635265-7b1fbfd1e4e0?auto=format&fit=crop&q=80&w=2000" 
+            src="https://images.unsplash.com/photo-1531482615713-2afd69097998?auto=format&fit=crop&q=80&w=2000" 
             alt="Mining background" 
             className="w-full h-full object-cover opacity-40"
             referrerPolicy="no-referrer"
@@ -71,7 +71,7 @@ export default function Home() {
           >
             <div className="aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
               <img 
-                src="https://images.unsplash.com/photo-1578575437130-527eed3abbec?auto=format&fit=crop&q=80&w=1000" 
+                src="https://images.unsplash.com/photo-1523805081730-614449379e7d?auto=format&fit=crop&q=80&w=1000" 
                 alt="Mining site" 
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"

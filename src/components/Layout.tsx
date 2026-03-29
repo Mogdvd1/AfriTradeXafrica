@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Menu, X, ChevronRight, Mail, Phone, MapPin, Linkedin, Twitter, Facebook } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import Logo from './Logo';
 
 interface LayoutProps {
   children: ReactNode;
@@ -34,16 +35,8 @@ export default function Layout({ children }: LayoutProps) {
       {/* Header */}
       <header className="sticky top-0 z-50 bg-jet-black/80 backdrop-blur-lg border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3">
-            <img 
-              src="https://images.unsplash.com/photo-1635405074683-96d6921a2a2c?auto=format&fit=crop&q=80&w=100" 
-              alt="AfriTradeX Logo" 
-              className="w-10 h-10 object-contain"
-              referrerPolicy="no-referrer"
-            />
-            <span className="text-2xl font-black tracking-tighter text-white hidden sm:block">
-              AfriTrade<span className="text-gold">X</span>
-            </span>
+          <Link to="/">
+            <Logo />
           </Link>
 
           {/* Desktop Nav */}
@@ -118,14 +111,8 @@ export default function Layout({ children }: LayoutProps) {
       <footer className="bg-jet-black border-t border-white/5 pt-20 pb-10">
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12 text-center sm:text-left">
           <div className="space-y-6 flex flex-col items-center sm:items-start">
-            <Link to="/" className="flex items-center gap-3">
-              <img 
-                src="https://images.unsplash.com/photo-1635405074683-96d6921a2a2c?auto=format&fit=crop&q=80&w=100" 
-                alt="AfriTradeX Logo" 
-                className="w-8 h-8 object-contain"
-                referrerPolicy="no-referrer"
-              />
-              <span className="text-xl font-bold text-white">AfriTradeX</span>
+            <Link to="/">
+              <Logo className="w-8 h-8" iconSize={20} />
             </Link>
             <p className="text-soft-grey text-sm leading-relaxed max-w-xs">
               Formalising Africa’s hidden mineral economy through digital settlement, ethical sourcing, and safer trade for artisanal miners.
