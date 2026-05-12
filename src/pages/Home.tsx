@@ -71,7 +71,7 @@ export default function Home() {
           >
             <div className="aspect-video rounded-2xl overflow-hidden border border-white/10 shadow-2xl">
               <img 
-                src="https://images.unsplash.com/photo-1523805081730-614449379e7d?auto=format&fit=crop&q=80&w=1000" 
+                src="https://images.unsplash.com/photo-1516156008625-3a9d6067fab5?auto=format&fit=crop&q=80&w=1000" 
                 alt="Mining site" 
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"

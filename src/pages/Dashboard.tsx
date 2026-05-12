@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   LayoutDashboard, 
@@ -16,7 +16,11 @@ import {
   Clock,
   AlertTriangle,
   Shield,
-  Plus
+  Plus,
+  Loader2,
+  User as UserIcon,
+  Mail,
+  Pickaxe
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -29,141 +33,269 @@ import {
 } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import Logo from '../components/Logo';
-import TwoFactorModal from '../components/TwoFactorModal';
-
-const stats = [
-  { name: 'Total Trade Volume', value: '$1.2M', change: '+12.5%', icon: TrendingUp, color: 'text-gold' },
-  { name: 'Verified Miners', value: '450', change: '+8.2%', icon: Users, color: 'text-blue-400' },
-  { name: 'Active Escrows', value: '24', change: '-2.4%', icon: ShieldCheck, color: 'text-green-400' },
-  { name: 'Compliance Score', value: '98%', change: '+1.5%', icon: CheckCircle2, color: 'text-gold' },
-];
-
-const chartData = [
-  { month: 'Oct', volume: 450000 },
-  { month: 'Nov', volume: 520000 },
-  { month: 'Dec', volume: 480000 },
-  { month: 'Jan', volume: 610000 },
-  { month: 'Feb', volume: 750000 },
-  { month: 'Mar', volume: 1200000 },
-];
-
-const recentTrades = [
-  { 
-    id: 'TRD-001', 
-    miner: 'Copper Belt Coop', 
-    buyer: 'Global Metals Inc.', 
-    amount: '$45,000', 
-    status: 'Completed', 
-    date: '2026-03-28',
-    mineral: 'Copper',
-    quantity: '15 Tons',
-    grade: '99.9% Cu',
-    price: '$3,000/Ton',
-    docs: ['Assay Certificate', 'Export Permit', 'Bill of Lading']
-  },
-  { 
-    id: 'TRD-002', 
-    miner: 'Ndola Artisans', 
-    buyer: 'Swiss Refineries', 
-    amount: '$12,500', 
-    status: 'In Escrow', 
-    date: '2026-03-27',
-    mineral: 'Cobalt',
-    quantity: '2 Tons',
-    grade: '15% Co',
-    price: '$6,250/Ton',
-    docs: ['Origin Certificate', 'Testing Report']
-  },
-  { 
-    id: 'TRD-003', 
-    miner: 'Kabwe Mining Group', 
-    buyer: 'Tech Alloys Ltd.', 
-    amount: '$8,200', 
-    status: 'Pending Testing', 
-    date: '2026-03-26',
-    mineral: 'Zinc',
-    quantity: '10 Tons',
-    grade: '45% Zn',
-    price: '$820/Ton',
-    docs: ['Manifest']
-  },
-  { 
-    id: 'TRD-004', 
-    miner: 'Solwezi Miners', 
-    buyer: 'China Strategic', 
-    amount: '$120,000', 
-    status: 'Completed', 
-    date: '2026-03-25',
-    mineral: 'Copper',
-    quantity: '40 Tons',
-    grade: '98.5% Cu',
-    price: '$3,000/Ton',
-    docs: ['Assay Certificate', 'Export Permit', 'Logistics Plan']
-  },
-];
+import { useFirebase } from '../contexts/FirebaseContext';
+import { auth, signOut, db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, query, orderBy, onSnapshot, limit, doc, updateDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function Dashboard() {
+  const { user, loading: authLoading, isAdmin, isMiner, isBuyer, role } = useFirebase();
   const navigate = useNavigate();
-  const [is2FAOpen, setIs2FAOpen] = useState(false);
   const [isNewTradeModalOpen, setIsNewTradeModalOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const [selectedTrade, setSelectedTrade] = useState<typeof recentTrades[0] | null>(null);
+  const [selectedTrade, setSelectedTrade] = useState<any | null>(null);
   const [currentView, setCurrentView] = useState('overview');
+  const [submissions, setSubmissions] = useState<any[]>([]);
+  const [trades, setTrades] = useState<any[]>([]);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(true);
+  const [loadingTrades, setLoadingTrades] = useState(true);
+  const [miners, setMiners] = useState<any[]>([]);
+  const [loadingMiners, setLoadingMiners] = useState(true);
+  const [selectedCoop, setSelectedCoop] = useState<any | null>(null);
+  const [isTwoFactorEnabled, setIsTwoFactorEnabled] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [newTradeData, setNewTradeData] = useState({
+    minerId: '',
+    buyerId: '',
+    minerName: '',
+    buyerName: '',
+    mineral: 'Copper',
+    amount: 0,
+    quantity: '',
+    grade: '',
+    status: 'In Escrow'
+  });
 
-  const handleLogout = () => {
-    navigate('/login');
-  };
-
-  const handleSensitiveAction = (actionName: string) => {
-    setPendingAction(actionName);
-    setIs2FAOpen(true);
-  };
-
-  const on2FAVerify = () => {
-    setIs2FAOpen(false);
-    if (pendingAction === 'New Trade Entry') {
-      setIsNewTradeModalOpen(true);
-    } else if (pendingAction === 'Download Trade Audit Trail') {
-      // Simulate download
-      alert(`Downloading Audit Trail for ${selectedTrade?.id}...`);
-    } else {
-      alert(`Success: ${pendingAction} authorized via 2FA.`);
+  // Fetch user settings (2FA)
+  useEffect(() => {
+    if (user) {
+      const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (doc) => {
+        if (doc.exists()) {
+          setIsTwoFactorEnabled(doc.data().twoFactorEnabled || false);
+        }
+      });
+      return () => unsubscribe();
     }
-    setPendingAction(null);
+  }, [user]);
+
+  const toggleTwoFactor = async () => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        twoFactorEnabled: !isTwoFactorEnabled
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+    }
   };
 
-  const filteredTrades = [...recentTrades, ...recentTrades].filter(trade => 
-    trade.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    trade.miner.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    trade.buyer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    trade.mineral.toLowerCase().includes(searchQuery.toLowerCase())
+  const handleCreateTrade = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (isTwoFactorEnabled && !isVerifying) {
+      setIsVerifying(true);
+      return;
+    }
+
+    try {
+      const tradeId = `TRD-${Math.floor(1000 + Math.random() * 9000)}`;
+      await addDoc(collection(db, 'trades'), {
+        ...newTradeData,
+        tradeId,
+        createdAt: serverTimestamp()
+      });
+      setIsNewTradeModalOpen(false);
+      setIsVerifying(false);
+      setVerificationCode('');
+      setNewTradeData({
+        minerId: '',
+        buyerId: '',
+        minerName: '',
+        buyerName: '',
+        mineral: 'Copper',
+        amount: 0,
+        quantity: '',
+        grade: '',
+        status: 'In Escrow'
+      });
+      alert('Trade settlement recorded successfully.');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'trades');
+    }
+  };
+
+  // Stats calculation
+  const [dashboardStats, setDashboardStats] = useState([
+    { name: 'Total Trade Volume', value: '$0', change: '0%', icon: TrendingUp, color: 'text-gold' },
+    { name: 'Verified Miners', value: '0', change: '0%', icon: Users, color: 'text-blue-400' },
+    { name: 'Active Escrows', value: '0', change: '0%', icon: ShieldCheck, color: 'text-green-400' },
+    { name: 'Compliance Score', value: '100%', change: '0%', icon: CheckCircle2, color: 'text-gold' },
+  ]);
+
+  const [chartData, setChartData] = useState<any[]>([]);
+
+  // Fetch trades
+  useEffect(() => {
+    const q = query(collection(db, 'trades'), orderBy('createdAt', 'desc'), limit(50));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().createdAt?.toDate?.()?.toLocaleDateString() || 'Recently'
+      })) as any[];
+      setTrades(data);
+      setLoadingTrades(false);
+
+      // Update stats based on real data
+      const totalVolume = data.reduce((acc, trade) => acc + (Number(trade.amount) || 0), 0);
+      const activeEscrows = data.filter(t => t.status === 'In Escrow').length;
+      
+      setDashboardStats(prev => [
+        { ...prev[0], value: `$${(totalVolume / 1000).toFixed(1)}k` },
+        { ...prev[1], value: miners.length.toString() || '0' },
+        { ...prev[2], value: activeEscrows.toString() },
+        { ...prev[3], value: '98%' },
+      ]);
+
+      // Generate dynamic chart data based on last 6 months (simulated from trades dates)
+      const months = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
+      const dynamicChart = months.map(m => ({ 
+        month: m, 
+        volume: data.filter(t => t.date && t.date.includes(m)).reduce((acc, t) => acc + (Number(t.amount) || 0), 0)
+      }));
+      setChartData(dynamicChart);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'trades');
+    });
+    return () => unsubscribe();
+  }, [miners]);
+
+  // Fetch miners
+  useEffect(() => {
+    const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(100));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((u: any) => u.role === 'miner');
+      setMiners(data);
+      setLoadingMiners(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'users');
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch submissions if admin
+  useEffect(() => {
+    if (user && isAdmin) {
+      const q = query(collection(db, 'submissions'), orderBy('createdAt', 'desc'), limit(50));
+      const unsubscribe = onSnapshot(q, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate?.()?.toLocaleDateString() || 'Recently'
+        }));
+        setSubmissions(data);
+        setLoadingSubmissions(false);
+      }, (error) => {
+        handleFirestoreError(error, OperationType.LIST, 'submissions');
+      });
+      return () => unsubscribe();
+    } else {
+      setLoadingSubmissions(false);
+    }
+  }, [user, isAdmin]);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
+  const filteredTrades = trades.filter(trade => 
+    (trade.tradeId || trade.id).toLowerCase().includes(searchQuery.toLowerCase()) ||
+    trade.minerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    trade.buyerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    trade.mineral?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-jet-black">
+        <Loader2 className="animate-spin text-gold" size={48} />
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
   const renderView = () => {
+    if (role === 'client') {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[80vh] text-center px-4">
+          <motion.div 
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="w-32 h-32 bg-gold/10 rounded-full flex items-center justify-center text-gold mb-12 relative"
+          >
+            <ShieldCheck size={64} className="relative z-10" />
+            <div className="absolute inset-0 bg-gold/20 rounded-full animate-ping opacity-20" />
+          </motion.div>
+          <h1 className="text-4xl font-black mb-6 text-white tracking-tight">Onboarding Required</h1>
+          <p className="text-soft-grey text-lg mb-12 max-w-lg mx-auto leading-relaxed">
+            Your account is currently in 'Client' mode. To access full platform features like trade settlements, ASM directories, and compliance tools, please complete your onboarding registration.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
+            <button 
+              onClick={() => navigate('/onboarding')}
+              className="btn-primary px-8 py-4 text-lg flex items-center justify-center gap-3 flex-1"
+            >
+              Start Onboarding
+              <ArrowUpRight size={20} />
+            </button>
+            <button 
+              onClick={handleLogout}
+              className="btn-secondary px-8 py-4 text-lg flex-1"
+            >
+              Sign Out
+            </button>
+          </div>
+          <p className="text-soft-grey text-xs mt-8 font-bold uppercase tracking-widest">AfriTradeX Secure Network</p>
+        </div>
+      );
+    }
+
     switch (currentView) {
       case 'overview':
         return (
-          <div className="space-y-8">
-            <div className="flex items-center justify-between">
+          <div className="space-y-6 md:space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold text-white">Platform Overview</h1>
-                <p className="text-soft-grey mt-1">Welcome back, here's what's happening today.</p>
+                <h1 className="text-2xl md:text-3xl font-bold text-white">
+                  {isMiner ? 'Miner Dashboard' : isBuyer ? 'Buyer Dashboard' : 'Platform Overview'}
+                </h1>
+                <p className="text-soft-grey mt-1 text-sm md:text-base">Welcome back, {user?.displayName}. Here's your trade activity.</p>
               </div>
-              <button 
-                onClick={() => handleSensitiveAction('New Trade Entry')}
-                className="btn-primary py-2 px-6 text-sm flex items-center gap-2"
-              >
-                <Plus size={16} />
-                New Trade Entry
-              </button>
+              {(isMiner || isBuyer || isAdmin) && (
+                <button 
+                  onClick={() => setIsNewTradeModalOpen(true)}
+                  className="btn-primary py-2.5 px-6 text-sm flex items-center justify-center gap-2 w-full sm:w-auto"
+                >
+                  <Plus size={16} />
+                  New Trade Entry
+                </button>
+              )}
             </div>
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {stats.map((stat, idx) => (
+              {dashboardStats.map((stat, idx) => (
                 <motion.div 
                   key={stat.name}
                   initial={{ opacity: 0, y: 20 }}
@@ -186,17 +318,17 @@ export default function Dashboard() {
             </div>
 
             {/* Trade Volume Chart */}
-            <div className="glass-card p-8 border-white/5">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-xl font-bold text-white">Trade Volume Trend</h2>
+            <div className="glass-card p-4 md:p-8 border-white/5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 md:mb-8 gap-4">
+                <h2 className="text-lg md:text-xl font-bold text-white">Trade Volume Trend</h2>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full bg-gold" />
-                    <span className="text-xs text-soft-grey">Monthly Volume (USD)</span>
+                    <span className="text-[10px] md:text-xs text-soft-grey">Monthly Volume (USD)</span>
                   </div>
                 </div>
               </div>
-              <div className="h-[300px] w-full">
+              <div className="h-[250px] md:h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartData}>
                     <defs>
@@ -245,20 +377,89 @@ export default function Dashboard() {
             </div>
 
             {/* Main Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+              {/* Recent Submissions (New!) */}
+              {isAdmin && (
+                <div className="lg:col-span-2 glass-card p-4 md:p-8 border-white/5 overflow-hidden">
+                  <div className="flex items-center justify-between mb-6 md:mb-8">
+                    <h2 className="text-lg md:text-xl font-bold text-white">Recent Onboarding Submissions</h2>
+                    <span className="text-xs font-bold text-gold uppercase tracking-widest bg-gold/10 px-3 py-1 rounded-full">Admin View</span>
+                  </div>
+                  {loadingSubmissions ? (
+                    <div className="flex justify-center py-12">
+                      <Loader2 className="animate-spin text-gold" size={32} />
+                    </div>
+                  ) : submissions.length > 0 ? (
+                    <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                      <table className="w-full text-left min-w-[500px]">
+                        <thead>
+                          <tr className="text-xs text-soft-grey uppercase tracking-widest border-b border-white/5">
+                            <th className="pb-4 font-bold">Applicant</th>
+                            <th className="pb-4 font-bold">Role</th>
+                            <th className="pb-4 font-bold">Email</th>
+                            <th className="pb-4 font-bold">KYC</th>
+                            <th className="pb-4 font-bold">Status</th>
+                            <th className="pb-4 font-bold">Date</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-sm">
+                          {submissions.map((sub) => (
+                            <tr key={sub.id} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors group">
+                              <td className="py-4 text-white font-medium">{sub.fullName}</td>
+                              <td className="py-4">
+                                <span className="text-xs font-bold uppercase tracking-widest text-soft-grey">{sub.role}</span>
+                              </td>
+                              <td className="py-4 text-soft-grey">{sub.email}</td>
+                              <td className="py-4">
+                                {sub.kycDocumentUrl ? (
+                                  <a 
+                                    href={sub.kycDocumentUrl} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-gold hover:underline flex items-center gap-1 text-xs"
+                                  >
+                                    <FileText size={14} />
+                                    View Doc
+                                  </a>
+                                ) : (
+                                  <span className="text-xs text-soft-grey/50 italic">No Doc</span>
+                                )}
+                              </td>
+                              <td className="py-4">
+                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                                  sub.status === 'verified' ? 'bg-green-400/10 text-green-400' : 
+                                  sub.status === 'pending' ? 'bg-gold/10 text-gold' : 'bg-red-400/10 text-red-400'
+                                }`}>
+                                  {sub.status}
+                                </span>
+                              </td>
+                              <td className="py-4 text-soft-grey">{sub.createdAt}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <p className="text-soft-grey">No onboarding submissions found.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Recent Trades */}
-              <div className="lg:col-span-2 glass-card p-8 border-white/5">
-                <div className="flex items-center justify-between mb-8">
-                  <h2 className="text-xl font-bold text-white">Recent Trade Settlements</h2>
+              <div className={`${isAdmin ? 'lg:col-span-3' : 'lg:col-span-2'} glass-card p-4 md:p-8 border-white/5 overflow-hidden`}>
+                <div className="flex items-center justify-between mb-6 md:mb-8">
+                  <h2 className="text-lg md:text-xl font-bold text-white">Recent Settlements</h2>
                   <button 
                     onClick={() => setCurrentView('trades')}
-                    className="text-gold text-sm font-bold hover:underline"
+                    className="text-gold text-xs md:text-sm font-bold hover:underline"
                   >
                     View All
                   </button>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
+                <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                  <table className="w-full text-left min-w-[500px]">
                     <thead>
                       <tr className="text-xs text-soft-grey uppercase tracking-widest border-b border-white/5">
                         <th className="pb-4 font-bold">Trade ID</th>
@@ -269,37 +470,45 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody className="text-sm">
-                      {recentTrades.map((trade) => (
-                        <tr key={trade.id} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors group">
-                          <td className="py-4 font-mono">
-                            <button 
-                              onClick={() => setSelectedTrade(trade)}
-                              className="text-gold hover:underline font-bold"
-                            >
-                              {trade.id}
-                            </button>
+                      {trades.length > 0 ? (
+                        trades.slice(0, 5).map((trade) => (
+                          <tr key={trade.id} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors group">
+                            <td className="py-4 font-mono">
+                              <button 
+                                onClick={() => setSelectedTrade(trade)}
+                                className="text-gold hover:underline font-bold"
+                              >
+                                {trade.tradeId || trade.id}
+                              </button>
+                            </td>
+                            <td className="py-4 text-white font-medium">{trade.minerName}</td>
+                            <td className="py-4 text-white font-bold">${Number(trade.amount).toLocaleString()}</td>
+                            <td className="py-4">
+                              <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                                trade.status === 'Completed' ? 'bg-green-400/10 text-green-400' : 
+                                trade.status === 'In Escrow' ? 'bg-gold/10 text-gold' : 'bg-blue-400/10 text-blue-400'
+                              }`}>
+                                {trade.status}
+                              </span>
+                            </td>
+                            <td className="py-4 text-soft-grey">{trade.date}</td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-soft-grey">
+                            {loadingTrades ? 'Loading settlements...' : 'No settlements recorded yet.'}
                           </td>
-                          <td className="py-4 text-white font-medium">{trade.miner}</td>
-                          <td className="py-4 text-white font-bold">{trade.amount}</td>
-                          <td className="py-4">
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                              trade.status === 'Completed' ? 'bg-green-400/10 text-green-400' : 
-                              trade.status === 'In Escrow' ? 'bg-gold/10 text-gold' : 'bg-blue-400/10 text-blue-400'
-                            }`}>
-                              {trade.status}
-                            </span>
-                          </td>
-                          <td className="py-4 text-soft-grey">{trade.date}</td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 </div>
               </div>
 
               {/* Compliance Alerts */}
-              <div className="glass-card p-8 border-white/5">
-                <h2 className="text-xl font-bold text-white mb-8">Compliance Alerts</h2>
+              <div className="glass-card p-4 md:p-8 border-white/5">
+                <h2 className="text-lg md:text-xl font-bold text-white mb-6 md:mb-8">Compliance Alerts</h2>
                 <div className="space-y-6">
                   <AlertItem 
                     icon={AlertTriangle} 
@@ -330,24 +539,143 @@ export default function Dashboard() {
             </div>
           </div>
         );
-      case 'trades':
+      case 'miner-activity':
         return (
-          <div className="space-y-8">
-            <div className="flex items-center justify-between">
+          <div className="space-y-6 md:space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h1 className="text-3xl font-bold text-white">Trade History</h1>
-                <p className="text-soft-grey mt-1">Manage and track all mineral trade settlements.</p>
+                <h1 className="text-2xl md:text-3xl font-bold text-white">Miner Activity</h1>
+                <p className="text-soft-grey mt-1 text-sm md:text-base">Detailed tracking of your mining operations and sales.</p>
               </div>
               <button 
-                onClick={() => handleSensitiveAction('New Trade Entry')}
-                className="btn-primary py-2 px-6 text-sm flex items-center gap-2"
+                onClick={() => setIsNewTradeModalOpen(true)}
+                className="btn-primary py-2.5 px-6 text-sm flex items-center justify-center gap-2 w-full sm:w-auto"
+              >
+                <Plus size={16} />
+                New Trade Entry
+              </button>
+            </div>
+
+            {/* Miner Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[
+                { 
+                  name: 'Total Sales', 
+                  value: `${(trades.reduce((acc, t) => acc + (Number(t.amount) || 0), 0) / 1000).toFixed(1)}k`, 
+                  change: '+15.2%', 
+                  icon: TrendingUp, 
+                  color: 'text-gold' 
+                },
+                { 
+                  name: 'Ore Extracted', 
+                  value: '125 Tons', 
+                  change: '+5.4%', 
+                  icon: Pickaxe, 
+                  color: 'text-blue-400' 
+                },
+                { 
+                  name: 'Active Escrows', 
+                  value: trades.filter(t => t.status === 'In Escrow').length.toString(), 
+                  change: '0%', 
+                  icon: ShieldCheck, 
+                  color: 'text-green-400' 
+                },
+              ].map((stat, idx) => (
+                <motion.div 
+                  key={stat.name}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.1 }}
+                  className="glass-card p-6 border-white/5"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className={`p-3 rounded-xl bg-white/5 ${stat.color}`}>
+                      <stat.icon size={24} />
+                    </div>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${stat.change.startsWith('+') ? 'bg-green-400/10 text-green-400' : stat.change === '0%' ? 'bg-white/10 text-soft-grey' : 'bg-red-400/10 text-red-400'}`}>
+                      {stat.change}
+                    </span>
+                  </div>
+                  <h3 className="text-soft-grey text-sm font-medium">{stat.name}</h3>
+                  <p className="text-3xl font-bold text-white mt-1">{stat.value}</p>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Recent Miner Trades */}
+            <div className="glass-card p-4 md:p-8 border-white/5 overflow-hidden">
+              <div className="flex items-center justify-between mb-6 md:mb-8">
+                <h2 className="text-lg md:text-xl font-bold text-white">Recent Trade Activities</h2>
+              </div>
+              <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                <table className="w-full text-left min-w-[500px]">
+                  <thead>
+                    <tr className="text-xs text-soft-grey uppercase tracking-widest border-b border-white/5">
+                      <th className="pb-4 font-bold">Trade ID</th>
+                      <th className="pb-4 font-bold">Buyer</th>
+                      <th className="pb-4 font-bold">Mineral</th>
+                      <th className="pb-4 font-bold">Amount</th>
+                      <th className="pb-4 font-bold">Status</th>
+                      <th className="pb-4 font-bold">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm">
+                    {trades.length > 0 ? (
+                      trades.map((trade) => (
+                        <tr key={trade.id} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors group">
+                          <td className="py-4 font-mono">
+                            <button 
+                              onClick={() => setSelectedTrade(trade)}
+                              className="text-gold hover:underline font-bold"
+                            >
+                              {trade.tradeId || trade.id}
+                            </button>
+                          </td>
+                          <td className="py-4 text-white font-medium">{trade.buyerName}</td>
+                          <td className="py-4 text-white">{trade.mineral}</td>
+                          <td className="py-4 text-white font-bold">${Number(trade.amount).toLocaleString()}</td>
+                          <td className="py-4">
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                              trade.status === 'Completed' ? 'bg-green-400/10 text-green-400' : 
+                              trade.status === 'In Escrow' ? 'bg-gold/10 text-gold' : 'bg-blue-400/10 text-blue-400'
+                            }`}>
+                              {trade.status}
+                            </span>
+                          </td>
+                          <td className="py-4 text-soft-grey">{trade.date}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-soft-grey">
+                          {loadingTrades ? 'Loading trade activities...' : 'No trade activities recorded yet.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        );
+      case 'trades':
+        return (
+          <div className="space-y-6 md:space-y-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold text-white">Trade History</h1>
+                <p className="text-soft-grey mt-1 text-sm md:text-base">Manage and track all mineral trade settlements.</p>
+              </div>
+              <button 
+                onClick={() => setIsNewTradeModalOpen(true)}
+                className="btn-primary py-2.5 px-6 text-sm flex items-center justify-center gap-2 w-full sm:w-auto"
               >
                 <Plus size={16} />
                 New Trade Entry
               </button>
             </div>
             
-            <div className="flex items-center gap-4 bg-jet-black border border-white/10 rounded-xl px-4 py-3 w-full max-w-md">
+            <div className="flex items-center gap-4 bg-jet-black border border-white/10 rounded-xl px-4 py-3 w-full md:max-w-md">
               <Search size={18} className="text-soft-grey" />
               <input 
                 type="text" 
@@ -358,9 +686,9 @@ export default function Dashboard() {
               />
             </div>
 
-            <div className="glass-card p-8 border-white/5">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
+            <div className="glass-card p-4 md:p-8 border-white/5">
+              <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+                <table className="w-full text-left min-w-[800px] md:min-w-full">
                   <thead>
                     <tr className="text-xs text-soft-grey uppercase tracking-widest border-b border-white/5">
                       <th className="pb-4 font-bold">Trade ID</th>
@@ -373,21 +701,26 @@ export default function Dashboard() {
                     </tr>
                   </thead>
                   <tbody className="text-sm">
-                    {filteredTrades.length > 0 ? (
-                      filteredTrades.map((trade, idx) => (
+                    {trades.length > 0 ? (
+                      trades.filter(t => 
+                        t.tradeId?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        t.minerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        t.buyerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        t.mineral?.toLowerCase().includes(searchQuery.toLowerCase())
+                      ).map((trade, idx) => (
                         <tr key={`${trade.id}-${idx}`} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors group">
                           <td className="py-4 font-mono">
                             <button 
                               onClick={() => setSelectedTrade(trade)}
                               className="text-gold hover:underline font-bold"
                             >
-                              {trade.id}
+                              {trade.tradeId || trade.id}
                             </button>
                           </td>
-                          <td className="py-4 text-white font-medium">{trade.miner}</td>
-                          <td className="py-4 text-white font-medium">{trade.buyer}</td>
+                          <td className="py-4 text-white font-medium">{trade.minerName}</td>
+                          <td className="py-4 text-white font-medium">{trade.buyerName}</td>
                           <td className="py-4 text-white">{trade.mineral}</td>
-                          <td className="py-4 text-white font-bold">{trade.amount}</td>
+                          <td className="py-4 text-white font-bold">${Number(trade.amount).toLocaleString()}</td>
                           <td className="py-4">
                             <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
                               trade.status === 'Completed' ? 'bg-green-400/10 text-green-400' : 
@@ -402,7 +735,7 @@ export default function Dashboard() {
                     ) : (
                       <tr>
                         <td colSpan={7} className="py-12 text-center text-soft-grey">
-                          No trades found matching your search.
+                          {loadingTrades ? 'Loading trades...' : 'No trades found matching your search.'}
                         </td>
                       </tr>
                     )}
@@ -414,120 +747,134 @@ export default function Dashboard() {
         );
       case 'asm':
         return (
-          <div className="space-y-8">
+          <div className="space-y-6 md:space-y-8">
             <div>
-              <h1 className="text-3xl font-bold text-white">Verified ASM Cooperatives</h1>
-              <p className="text-soft-grey mt-1">Directory of artisanal and small-scale mining groups on the platform.</p>
+              <h1 className="text-2xl md:text-3xl font-bold text-white">Verified ASM Cooperatives</h1>
+              <p className="text-soft-grey mt-1 text-sm md:text-base">Directory of artisanal and small-scale mining groups on the platform.</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[
-                { name: 'Copper Belt Coop', location: 'Kitwe', members: 120, status: 'Verified' },
-                { name: 'Ndola Artisans', location: 'Ndola', members: 45, status: 'Verified' },
-                { name: 'Kabwe Mining Group', location: 'Kabwe', members: 85, status: 'Pending Audit' },
-                { name: 'Solwezi Miners', location: 'Solwezi', members: 210, status: 'Verified' },
-                { name: 'Mansa Manganese', location: 'Mansa', members: 30, status: 'Verified' },
-              ].map((coop, idx) => (
-                <div key={idx} className="glass-card p-6 border-white/5">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="w-12 h-12 bg-gold/10 rounded-xl flex items-center justify-center text-gold">
-                      <Users size={24} />
+            {loadingMiners ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="animate-spin text-gold" size={32} />
+              </div>
+            ) : miners.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                {miners.map((coop, idx) => (
+                  <div key={coop.id} className="glass-card p-5 md:p-6 border-white/5">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="w-10 h-10 md:w-12 md:h-12 bg-gold/10 rounded-xl flex items-center justify-center text-gold">
+                        <Users size={20} md:size={24} />
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-widest ${
+                        coop.kycStatus === 'verified' ? 'bg-green-400/10 text-green-400' : 'bg-gold/10 text-gold'
+                      }`}>
+                        {coop.kycStatus || 'Unverified'}
+                      </span>
                     </div>
-                    <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-widest ${
-                      coop.status === 'Verified' ? 'bg-green-400/10 text-green-400' : 'bg-gold/10 text-gold'
-                    }`}>
-                      {coop.status}
-                    </span>
+                    <h3 className="text-lg font-bold text-white line-clamp-1">{coop.displayName || 'Unnamed Cooperative'}</h3>
+                    <p className="text-sm text-soft-grey mt-1">{coop.email}</p>
+                    <div className="mt-6 pt-6 border-t border-white/5 flex justify-between items-center">
+                      <span className="text-xs text-soft-grey">Member since {coop.createdAt?.toDate?.()?.getFullYear() || '2026'}</span>
+                      <button 
+                        onClick={() => setSelectedCoop(coop)}
+                        className="text-gold text-xs font-bold hover:underline"
+                      >
+                        View Profile
+                      </button>
+                    </div>
                   </div>
-                  <h3 className="text-lg font-bold text-white">{coop.name}</h3>
-                  <p className="text-sm text-soft-grey mt-1">{coop.location}, Zambia</p>
-                  <div className="mt-6 pt-6 border-t border-white/5 flex justify-between items-center">
-                    <span className="text-xs text-soft-grey">{coop.members} Active Members</span>
-                    <button className="text-gold text-xs font-bold hover:underline">View Profile</button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-white/5 rounded-2xl border border-white/5">
+                <Users size={48} className="text-soft-grey mx-auto mb-4 opacity-20" />
+                <p className="text-soft-grey">No verified cooperatives found.</p>
+              </div>
+            )}
           </div>
         );
       case 'reports':
         return (
-          <div className="space-y-8">
+          <div className="space-y-6 md:space-y-8">
             <div>
-              <h1 className="text-3xl font-bold text-white">Reports & Analytics</h1>
-              <p className="text-soft-grey mt-1">Download trade summaries, ESG reports, and compliance audits.</p>
+              <h1 className="text-2xl md:text-3xl font-bold text-white">Reports & Analytics</h1>
+              <p className="text-soft-grey mt-1 text-sm md:text-base">Download trade summaries, ESG reports, and compliance audits.</p>
             </div>
-            <div className="glass-card p-8 border-white/5">
+            <div className="glass-card p-4 md:p-8 border-white/5">
               <div className="space-y-4">
-                {[
-                  { title: 'Q1 2026 Trade Volume Summary', date: '2026-03-25', type: 'PDF', size: '2.4 MB' },
-                  { title: 'ESG Impact Report - Copper Belt', date: '2026-03-20', type: 'PDF', size: '4.1 MB' },
-                  { title: 'Monthly Compliance Audit Trail', date: '2026-03-01', type: 'XLSX', size: '1.2 MB' },
-                  { title: 'Mineral Traceability Log - Cobalt', date: '2026-02-28', type: 'PDF', size: '3.5 MB' },
-                ].map((report, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5 hover:border-gold/30 transition-all group cursor-pointer">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-white/5 rounded-lg text-soft-grey group-hover:text-gold transition-colors">
-                        <FileText size={20} />
+                {trades.length > 0 ? (
+                  trades.filter(t => t.kycDocumentUrl).map((trade, idx) => (
+                    <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5 hover:border-gold/30 transition-all group cursor-pointer gap-4">
+                      <div className="flex items-center gap-4">
+                        <div className="p-3 bg-white/5 rounded-lg text-soft-grey group-hover:text-gold transition-colors shrink-0">
+                          <FileText size={20} />
+                        </div>
+                        <div>
+                          <h4 className="text-white font-bold text-sm line-clamp-1">Assay Certificate - {trade.tradeId}</h4>
+                          <p className="text-xs text-soft-grey mt-1">Uploaded on {trade.date} • PDF • Verified</p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-white font-bold text-sm">{report.title}</h4>
-                        <p className="text-xs text-soft-grey mt-1">Generated on {report.date} • {report.type} • {report.size}</p>
-                      </div>
+                      <a href={trade.kycDocumentUrl} target="_blank" rel="noopener noreferrer" className="btn-secondary py-2 px-4 text-xs w-full sm:w-auto text-center">Download</a>
                     </div>
-                    <button className="btn-secondary py-2 px-4 text-xs">Download</button>
+                  ))
+                ) : (
+                  <div className="text-center py-12 text-soft-grey italic">
+                    No documents or reports currently available for your account.
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>
         );
       case 'settings':
         return (
-          <div className="space-y-8">
+          <div className="space-y-6 md:space-y-8">
             <div>
-              <h1 className="text-3xl font-bold text-white">Platform Settings</h1>
-              <p className="text-soft-grey mt-1">Manage your account preferences and security settings.</p>
+              <h1 className="text-2xl md:text-3xl font-bold text-white">Platform Settings</h1>
+              <p className="text-soft-grey mt-1 text-sm md:text-base">Manage your account preferences and security settings.</p>
             </div>
             <div className="max-w-2xl space-y-6">
-              <div className="glass-card p-8 border-white/5">
-                <h2 className="text-xl font-bold text-white mb-6">Profile Information</h2>
+              <div className="glass-card p-5 md:p-8 border-white/5">
+                <h2 className="text-lg md:text-xl font-bold text-white mb-6">Profile Information</h2>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-soft-grey uppercase tracking-widest">Full Name</label>
-                      <input type="text" defaultValue="Admin User" className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-gold/50" />
+                      <input type="text" defaultValue={user?.displayName || ''} className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-gold/50" />
                     </div>
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-soft-grey uppercase tracking-widest">Email Address</label>
-                      <input type="email" defaultValue="admin@afritradex.com" className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-gold/50" />
+                      <input type="email" defaultValue={user?.email || ''} className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-gold/50" />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-soft-grey uppercase tracking-widest">Role</label>
-                    <input type="text" defaultValue="Platform Manager" disabled className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-soft-grey text-sm cursor-not-allowed" />
+                    <input type="text" defaultValue={role ? role.charAt(0).toUpperCase() + role.slice(1) : 'Platform User'} disabled className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-soft-grey text-sm cursor-not-allowed" />
                   </div>
-                  <button className="btn-primary py-2 px-6 text-sm mt-4">Save Changes</button>
+                  <button className="btn-primary py-2.5 px-6 text-sm mt-4 w-full sm:w-auto">Save Changes</button>
                 </div>
               </div>
 
-              <div className="glass-card p-8 border-white/5">
-                <h2 className="text-xl font-bold text-white mb-6">Security</h2>
+              <div className="glass-card p-5 md:p-8 border-white/5">
+                <h2 className="text-lg md:text-xl font-bold text-white mb-6">Security</h2>
                 <div className="space-y-6">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-4">
                     <div>
                       <h4 className="text-white font-bold text-sm">Two-Factor Authentication</h4>
                       <p className="text-xs text-soft-grey mt-1">Add an extra layer of security to your account.</p>
                     </div>
-                    <div className="w-12 h-6 bg-gold rounded-full relative cursor-pointer">
-                      <div className="absolute right-1 top-1 w-4 h-4 bg-jet-black rounded-full" />
+                    <div 
+                      onClick={toggleTwoFactor}
+                      className={`w-12 h-6 rounded-full relative cursor-pointer shrink-0 transition-colors ${isTwoFactorEnabled ? 'bg-gold' : 'bg-white/10'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 bg-jet-black rounded-full transition-all ${isTwoFactorEnabled ? 'right-1' : 'left-1'}`} />
                     </div>
                   </div>
-                  <div className="flex items-center justify-between border-t border-white/5 pt-6">
+                  <div className="flex items-center justify-between border-t border-white/5 pt-6 gap-4">
                     <div>
                       <h4 className="text-white font-bold text-sm">Change Password</h4>
                       <p className="text-xs text-soft-grey mt-1">Update your password regularly for better security.</p>
                     </div>
-                    <button className="btn-secondary py-2 px-4 text-xs">Update</button>
+                    <button className="btn-secondary py-2 px-4 text-xs shrink-0">Update</button>
                   </div>
                 </div>
               </div>
@@ -536,31 +883,29 @@ export default function Dashboard() {
         );
       case 'compliance':
         return (
-          <div className="space-y-8">
+          <div className="space-y-6 md:space-y-8">
             <div>
-              <h1 className="text-3xl font-bold text-white">Compliance Center</h1>
-              <p className="text-soft-grey mt-1">Regulatory monitoring and ESG verification dashboard.</p>
+              <h1 className="text-2xl md:text-3xl font-bold text-white">Compliance Center</h1>
+              <p className="text-soft-grey mt-1 text-sm md:text-base">Regulatory monitoring and ESG verification dashboard.</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="glass-card p-8 border-white/5">
-                <h2 className="text-xl font-bold text-white mb-6">Active Alerts</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+              <div className="glass-card p-5 md:p-8 border-white/5">
+                <h2 className="text-lg md:text-xl font-bold text-white mb-6">Active Alerts</h2>
                 <div className="space-y-6">
-                  <AlertItem 
-                    icon={AlertTriangle} 
-                    color="text-gold" 
-                    title="KYC Renewal Required" 
-                    desc="Copper Belt Coop KYC expires in 3 days." 
-                  />
-                  <AlertItem 
-                    icon={Clock} 
-                    color="text-blue-400" 
-                    title="Pending Verification" 
-                    desc="New buyer 'Lumina Metals' awaiting document review." 
-                  />
+                  {dashboardStats[2].value === '0' ? (
+                    <p className="text-sm text-soft-grey italic">No security or compliance alerts at this time.</p>
+                  ) : (
+                    <AlertItem 
+                      icon={Clock} 
+                      color="text-blue-400" 
+                      title="Pending Verification" 
+                      desc="Active trades are currently awaiting final settlement verification." 
+                    />
+                  )}
                 </div>
               </div>
-              <div className="glass-card p-8 border-white/5">
-                <h2 className="text-xl font-bold text-white mb-6">ESG Performance</h2>
+              <div className="glass-card p-5 md:p-8 border-white/5">
+                <h2 className="text-lg md:text-xl font-bold text-white mb-6">ESG Performance</h2>
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-soft-grey">Ethical Sourcing</span>
@@ -601,50 +946,93 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-charcoal-black flex">
+    <div className="min-h-screen bg-charcoal-black flex relative overflow-hidden">
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="fixed inset-0 bg-jet-black/80 backdrop-blur-sm z-40 lg:hidden"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
-      <aside className="w-64 bg-jet-black border-r border-white/5 hidden lg:flex flex-col">
-        <div className="p-6 border-b border-white/5">
-          <Logo className="w-8 h-8" iconSize={20} />
+      <aside className={`fixed inset-y-0 left-0 w-64 bg-jet-black border-r border-white/5 flex flex-col z-50 transition-transform duration-300 transform lg:relative lg:translate-x-0 ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 border-b border-white/5 flex items-center justify-between">
+          <Logo className="w-8 h-8" iconSize={20} showText={false} />
+          <button 
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="lg:hidden p-2 text-soft-grey hover:text-white"
+          >
+            <Plus className="rotate-45" size={24} />
+          </button>
         </div>
         
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           <SidebarLink 
             icon={LayoutDashboard} 
             label="Dashboard" 
             active={currentView === 'overview'} 
-            onClick={() => setCurrentView('overview')}
+            onClick={() => { setCurrentView('overview'); setIsMobileMenuOpen(false); }}
           />
-          <SidebarLink 
-            icon={TrendingUp} 
-            label="Trades" 
-            active={currentView === 'trades'} 
-            onClick={() => setCurrentView('trades')}
-          />
-          <SidebarLink 
-            icon={Users} 
-            label="Verified ASM" 
-            active={currentView === 'asm'} 
-            onClick={() => setCurrentView('asm')}
-          />
-          <SidebarLink 
-            icon={ShieldCheck} 
-            label="Compliance" 
-            active={currentView === 'compliance'} 
-            onClick={() => setCurrentView('compliance')}
-          />
-          <SidebarLink 
-            icon={FileText} 
-            label="Reports" 
-            active={currentView === 'reports'} 
-            onClick={() => setCurrentView('reports')}
-          />
+          
+          {isMiner && (
+            <SidebarLink 
+              icon={Pickaxe} 
+              label="Miner Activity" 
+              active={currentView === 'miner-activity'} 
+              onClick={() => { setCurrentView('miner-activity'); setIsMobileMenuOpen(false); }}
+            />
+          )}
+
+          {isAdmin && (
+            <>
+              <SidebarLink 
+                icon={Users} 
+                label="User Management" 
+                active={currentView === 'asm'} 
+                onClick={() => { setCurrentView('asm'); setIsMobileMenuOpen(false); }}
+              />
+              <SidebarLink 
+                icon={ShieldCheck} 
+                label="KYC Queue" 
+                active={currentView === 'compliance'} 
+                onClick={() => { setCurrentView('compliance'); setIsMobileMenuOpen(false); }}
+              />
+            </>
+          )}
+
+          {isBuyer && (
+            <SidebarLink 
+              icon={TrendingUp} 
+              label="Trade History" 
+              active={currentView === 'trades'} 
+              onClick={() => { setCurrentView('trades'); setIsMobileMenuOpen(false); }}
+            />
+          )}
+
           <SidebarLink 
             icon={Settings} 
             label="Settings" 
             active={currentView === 'settings'} 
-            onClick={() => setCurrentView('settings')}
+            onClick={() => { setCurrentView('settings'); setIsMobileMenuOpen(false); }}
           />
+          
+          {isAdmin && (
+            <div className="pt-4 mt-4 border-t border-white/5">
+              <button 
+                onClick={() => navigate('/admin')}
+                className="flex items-center gap-3 w-full p-3 rounded-lg transition-colors text-gold hover:bg-gold/10"
+              >
+                <ShieldCheck size={20} />
+                <span className="font-bold text-sm tracking-tight">Admin Dashboard</span>
+              </button>
+            </div>
+          )}
         </nav>
 
         <div className="p-4 border-t border-white/5">
@@ -659,26 +1047,36 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col relative">
+      <main className="flex-1 flex flex-col min-w-0">
         {/* Topbar */}
-        <header className="h-20 bg-jet-black border-b border-white/5 px-8 flex items-center justify-between">
-          <div className="flex items-center gap-4 bg-charcoal-black border border-white/10 rounded-full px-4 py-2 w-96">
-            <Search size={18} className="text-soft-grey" />
-            <input 
-              type="text" 
-              placeholder="Search trades, miners, or documents..." 
-              className="bg-transparent border-none outline-none text-sm text-white w-full"
-            />
+        <header className="h-20 bg-jet-black border-b border-white/5 px-4 md:px-8 flex items-center justify-between sticky top-0 z-30">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="lg:hidden p-2 text-soft-grey hover:text-white"
+            >
+              <LayoutDashboard size={24} />
+            </button>
+            <div className="hidden sm:flex items-center gap-4 bg-charcoal-black border border-white/10 rounded-full px-4 py-2 w-64 md:w-96">
+              <Search size={18} className="text-soft-grey" />
+              <input 
+                type="text" 
+                placeholder="Search..." 
+                className="bg-transparent border-none outline-none text-sm text-white w-full"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 md:gap-6">
             <div className="relative">
               <button 
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                className="relative text-soft-grey hover:text-white transition-colors"
+                className="relative text-soft-grey hover:text-white transition-colors p-2"
               >
                 <Bell size={22} />
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-gold text-jet-black text-[10px] font-bold rounded-full flex items-center justify-center">3</span>
+                <span className="absolute top-1 right-1 w-4 h-4 bg-gold text-jet-black text-[10px] font-bold rounded-full flex items-center justify-center">3</span>
               </button>
               
               <AnimatePresence>
@@ -729,11 +1127,11 @@ export default function Dashboard() {
                 className="flex items-center gap-3 group"
               >
                 <div className="text-right hidden sm:block">
-                  <p className="text-sm font-bold text-white leading-none group-hover:text-gold transition-colors">Admin User</p>
-                  <p className="text-xs text-soft-grey mt-1">Platform Manager</p>
+                  <p className="text-sm font-bold text-white leading-none group-hover:text-gold transition-colors">{user.displayName || 'User'}</p>
+                  <p className="text-xs text-soft-grey mt-1">{isAdmin ? 'Platform Manager' : 'Client'}</p>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-gold/20 border border-gold/40 flex items-center justify-center text-gold font-bold group-hover:border-gold transition-colors">
-                  AU
+                  {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
                 </div>
               </button>
 
@@ -775,7 +1173,7 @@ export default function Dashboard() {
         </header>
 
         {/* Dashboard Content */}
-        <div className="p-8 overflow-y-auto">
+        <div className="p-4 md:p-8 overflow-y-auto">
           {renderView()}
         </div>
 
@@ -795,7 +1193,7 @@ export default function Dashboard() {
                 animate={{ x: 0 }}
                 exit={{ x: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="relative w-full max-w-md bg-jet-black border-l border-white/10 h-full shadow-2xl flex flex-col"
+                className="relative w-full sm:max-w-md bg-jet-black border-l border-white/10 h-full shadow-2xl flex flex-col"
               >
                 <div className="p-6 border-b border-white/10 flex items-center justify-between">
                   <div>
@@ -832,37 +1230,43 @@ export default function Dashboard() {
                   </div>
 
                   {/* Details Grid */}
-                  <div className="grid grid-cols-2 gap-6">
-                    <DetailItem label="Miner" value={selectedTrade.miner} />
-                    <DetailItem label="Buyer" value={selectedTrade.buyer} />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <DetailItem label="Miner" value={selectedTrade.minerName} />
+                    <DetailItem label="Buyer" value={selectedTrade.buyerName} />
                     <DetailItem label="Mineral" value={selectedTrade.mineral} />
                     <DetailItem label="Quantity" value={selectedTrade.quantity} />
                     <DetailItem label="Grade" value={selectedTrade.grade} />
-                    <DetailItem label="Price" value={selectedTrade.price} />
-                    <DetailItem label="Total Amount" value={selectedTrade.amount} className="col-span-2" />
-                    <DetailItem label="Settlement Date" value={selectedTrade.date} className="col-span-2" />
+                    <DetailItem label="Total Amount" value={`${Number(selectedTrade.amount).toLocaleString()}`} className="sm:col-span-2" />
+                    <DetailItem label="Settlement Date" value={selectedTrade.date} className="sm:col-span-2" />
                   </div>
 
                   {/* Documents */}
                   <div className="space-y-4">
                     <h3 className="text-sm font-bold text-white uppercase tracking-widest">Associated Documents</h3>
                     <div className="space-y-2">
-                      {selectedTrade.docs.map((doc, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 hover:border-gold/30 transition-colors cursor-pointer group">
+                      {selectedTrade.kycDocumentUrl ? (
+                        <a 
+                          href={selectedTrade.kycDocumentUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 hover:border-gold/30 transition-colors cursor-pointer group"
+                        >
                           <div className="flex items-center gap-3">
                             <FileText size={18} className="text-soft-grey group-hover:text-gold transition-colors" />
-                            <span className="text-sm text-white">{doc}</span>
+                            <span className="text-sm text-white">Assay Certificate / Trade Document</span>
                           </div>
                           <ArrowUpRight size={16} className="text-soft-grey opacity-0 group-hover:opacity-100 transition-all" />
-                        </div>
-                      ))}
+                        </a>
+                      ) : (
+                        <p className="text-xs text-soft-grey italic">No documents attached to this trade.</p>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 <div className="p-6 border-t border-white/10 bg-white/5">
                   <button 
-                    onClick={() => handleSensitiveAction('Download Trade Audit Trail')}
+                    onClick={() => alert(`Downloading Audit Trail for ${selectedTrade?.id}...`)}
                     className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2"
                   >
                     <FileText size={18} />
@@ -875,13 +1279,70 @@ export default function Dashboard() {
         </AnimatePresence>
       </main>
 
-      <TwoFactorModal 
-        isOpen={is2FAOpen}
-        onClose={() => setIs2FAOpen(false)}
-        onVerify={on2FAVerify}
-        title="Security Verification Required"
-        description={`Please enter your 2FA code to authorize: ${pendingAction}`}
-      />
+      {/* Cooperative Profile Modal */}
+      <AnimatePresence>
+        {selectedCoop && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSelectedCoop(null)}
+              className="absolute inset-0 bg-jet-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="relative w-full max-w-lg bg-jet-black border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="p-6 border-b border-white/10 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-white">Cooperative Profile</h2>
+                <button 
+                  onClick={() => setSelectedCoop(null)}
+                  className="p-2 hover:bg-white/5 rounded-lg text-soft-grey transition-colors"
+                >
+                  <Plus className="rotate-45" size={24} />
+                </button>
+              </div>
+              <div className="p-8 space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-gold/10 rounded-2xl flex items-center justify-center text-gold">
+                    <Users size={32} />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-bold text-white">{selectedCoop.displayName || 'Unnamed Cooperative'}</h3>
+                    <p className="text-soft-grey">{selectedCoop.email}</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-6 pt-6 border-t border-white/5">
+                  <DetailItem label="Role" value={selectedCoop.role?.toUpperCase() || 'MINER'} />
+                  <DetailItem label="KYC Status" value={selectedCoop.kycStatus?.toUpperCase() || 'UNVERIFIED'} />
+                  <DetailItem label="Member Since" value={selectedCoop.createdAt?.toDate?.()?.toLocaleDateString() || 'Recently'} className="col-span-2" />
+                </div>
+
+                <div className="pt-6">
+                  <h4 className="text-xs font-bold text-soft-grey uppercase tracking-widest mb-3">Verification Documents</h4>
+                  {selectedCoop.kycDocumentUrl ? (
+                    <a 
+                      href={selectedCoop.kycDocumentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 p-4 bg-white/5 rounded-xl border border-white/5 hover:border-gold/30 transition-all group"
+                    >
+                      <FileText className="text-soft-grey group-hover:text-gold transition-colors" />
+                      <span className="text-sm text-white font-medium">View Registration Documents</span>
+                    </a>
+                  ) : (
+                    <p className="text-sm text-soft-grey italic">No documents uploaded yet.</p>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* New Trade Modal */}
       <AnimatePresence>
@@ -901,72 +1362,127 @@ export default function Dashboard() {
               className="relative w-full max-w-2xl bg-jet-black border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
             >
               <div className="p-6 border-b border-white/10 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-white">New Trade Entry</h2>
+                <h2 className="text-xl font-bold text-white">
+                  {isVerifying ? 'Security Verification' : 'New Trade Entry'}
+                </h2>
                 <button 
-                  onClick={() => setIsNewTradeModalOpen(false)}
+                  onClick={() => {
+                    setIsNewTradeModalOpen(false);
+                    setIsVerifying(false);
+                  }}
                   className="p-2 hover:bg-white/5 rounded-lg text-soft-grey transition-colors"
                 >
                   <Plus className="rotate-45" size={24} />
                 </button>
               </div>
-              <div className="p-8 space-y-6">
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-soft-grey uppercase tracking-widest">Miner/Cooperative</label>
-                    <select className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-gold/50">
-                      <option className="bg-jet-black">Select Miner</option>
-                      <option className="bg-jet-black">Copper Belt Coop</option>
-                      <option className="bg-jet-black">Ndola Artisans</option>
-                    </select>
+              <form onSubmit={handleCreateTrade} className="p-6 md:p-8 space-y-6">
+                {isVerifying ? (
+                  <div className="space-y-6 py-4 text-center">
+                    <div className="w-16 h-16 bg-gold/10 rounded-full flex items-center justify-center text-gold mx-auto mb-4">
+                      <Shield size={32} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-white">Authorize Settlement</h3>
+                      <p className="text-sm text-soft-grey mt-2">To complete this trade entry, please enter the 6-digit code from your linked security device.</p>
+                    </div>
+                    <div className="max-w-xs mx-auto">
+                      <input 
+                        type="text" 
+                        required
+                        maxLength={6}
+                        placeholder="0 0 0 0 0 0"
+                        value={verificationCode}
+                        onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl px-6 py-4 text-center text-2xl font-mono tracking-[0.5em] text-white outline-none focus:border-gold"
+                      />
+                    </div>
+                    <p className="text-[10px] text-soft-grey uppercase tracking-widest font-bold">Waiting for secure handshake...</p>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-soft-grey uppercase tracking-widest">Buyer</label>
-                    <select className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-gold/50">
-                      <option className="bg-jet-black">Select Buyer</option>
-                      <option className="bg-jet-black">Global Metals Inc.</option>
-                      <option className="bg-jet-black">Swiss Refineries</option>
-                    </select>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-soft-grey uppercase tracking-widest">Miner/Cooperative</label>
+                        <input 
+                          type="text" 
+                          required
+                          value={newTradeData.minerName}
+                          onChange={(e) => setNewTradeData({...newTradeData, minerName: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-gold/50" 
+                          placeholder="e.g. Copper Belt Coop"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-soft-grey uppercase tracking-widest">Buyer</label>
+                        <input 
+                          type="text" 
+                          required
+                          value={newTradeData.buyerName}
+                          onChange={(e) => setNewTradeData({...newTradeData, buyerName: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-gold/50" 
+                          placeholder="e.g. Global Metals Inc."
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-soft-grey uppercase tracking-widest">Mineral Type</label>
+                        <select 
+                          value={newTradeData.mineral}
+                          onChange={(e) => setNewTradeData({...newTradeData, mineral: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-gold/50"
+                        >
+                          <option value="Copper">Copper</option>
+                          <option value="Cobalt">Cobalt</option>
+                          <option value="Zinc">Zinc</option>
+                          <option value="Gold">Gold</option>
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-soft-grey uppercase tracking-widest">Amount (USD)</label>
+                        <input 
+                          type="number" 
+                          required
+                          value={newTradeData.amount}
+                          onChange={(e) => setNewTradeData({...newTradeData, amount: Number(e.target.value)})}
+                          placeholder="0.00" 
+                          className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-gold/50" 
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-soft-grey uppercase tracking-widest">Quantity/Grade</label>
+                      <input 
+                        type="text" 
+                        value={newTradeData.quantity}
+                        onChange={(e) => setNewTradeData({...newTradeData, quantity: e.target.value})}
+                        placeholder="e.g. 15 Tons / 99.9% Cu" 
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-gold/50" 
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-soft-grey uppercase tracking-widest">Mineral Type</label>
-                    <select className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-gold/50">
-                      <option className="bg-jet-black">Select Mineral</option>
-                      <option className="bg-jet-black">Copper</option>
-                      <option className="bg-jet-black">Cobalt</option>
-                      <option className="bg-jet-black">Zinc</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-soft-grey uppercase tracking-widest">Quantity (Tons)</label>
-                    <input type="number" placeholder="0.00" className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2 text-white text-sm outline-none focus:border-gold/50" />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-soft-grey uppercase tracking-widest">Upload Assay Certificate</label>
-                  <div className="border-2 border-dashed border-white/10 rounded-xl p-8 text-center hover:border-gold/50 transition-colors cursor-pointer">
-                    <FileText size={32} className="text-soft-grey mx-auto mb-4" />
-                    <p className="text-sm text-white font-bold">Click to upload or drag and drop</p>
-                    <p className="text-xs text-soft-grey mt-1">PDF, PNG, JPG up to 10MB</p>
-                  </div>
-                </div>
-                <div className="flex gap-4 pt-4">
+                )}
+                <div className="flex flex-col sm:flex-row gap-4 pt-4">
                   <button 
-                    onClick={() => setIsNewTradeModalOpen(false)}
-                    className="btn-secondary flex-1 py-3"
-                  >
-                    Cancel
-                  </button>
-                  <button 
+                    type="button"
                     onClick={() => {
-                      alert('Trade entry submitted for verification.');
-                      setIsNewTradeModalOpen(false);
+                      if (isVerifying) {
+                        setIsVerifying(false);
+                      } else {
+                        setIsNewTradeModalOpen(false);
+                      }
                     }}
-                    className="btn-primary flex-1 py-3"
+                    className="btn-secondary py-3 w-full sm:flex-1"
                   >
-                    Submit Trade
+                    {isVerifying ? 'Back' : 'Cancel'}
+                  </button>
+                  <button 
+                    type="submit"
+                    className="btn-primary py-3 w-full sm:flex-1"
+                    disabled={isVerifying && verificationCode.length < 6}
+                  >
+                    {isVerifying ? 'Verify & Submit' : 'Continue'}
                   </button>
                 </div>
-              </div>
+              </form>
             </motion.div>
           </div>
         )}

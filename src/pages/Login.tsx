@@ -1,29 +1,65 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Lock, Mail, ArrowRight, AlertCircle, Shield } from 'lucide-react';
+import { LogIn, ArrowRight, AlertCircle, Shield, Loader2 } from 'lucide-react';
 import Logo from '../components/Logo';
-import TwoFactorModal from '../components/TwoFactorModal';
+import { auth, googleProvider, microsoftProvider, signInWithPopup } from '../firebase';
+import { useFirebase } from '../contexts/FirebaseContext';
 
 export default function Login() {
-  const [email, setEmail] = useState('admin@afritradex.com');
-  const [password, setPassword] = useState('password123');
   const [error, setError] = useState('');
-  const [is2FAOpen, setIs2FAOpen] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginType, setLoginType] = useState<'google' | 'microsoft' | null>(null);
+  const { user } = useFirebase();
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (email === 'admin@afritradex.com' && password === 'password123') {
-      setIs2FAOpen(true);
-    } else {
-      setError('Invalid email or password. Use the sample credentials provided.');
+  // Redirect if already logged in
+  React.useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
+
+  const handleGoogleLogin = async () => {
+    setIsLoggingIn(true);
+    setLoginType('google');
+    setError('');
+    try {
+      await signInWithPopup(auth, googleProvider);
+      // Redirect to dashboard after successful login
+      navigate('/dashboard');
+    } catch (error: any) {
+      console.error('Login failed:', error);
+      if (error.code === 'auth/unauthorized-domain') {
+        setError('Unauthorized Domain: Please add "afritradexafrica.com" to your Firebase Authorized Domains list in the Firebase Console.');
+      } else {
+        setError('Failed to sign in with Google. Please try again.');
+      }
+      setIsLoggingIn(false);
+      setLoginType(null);
     }
   };
 
-  const handle2FAVerify = () => {
-    setIs2FAOpen(false);
-    navigate('/dashboard');
+  const handleMicrosoftLogin = async () => {
+    setIsLoggingIn(true);
+    setLoginType('microsoft');
+    setError('');
+    try {
+      await signInWithPopup(auth, microsoftProvider);
+      // Redirect to dashboard after successful login
+      navigate('/dashboard');
+    } catch (error: any) {
+      console.error('Login failed:', error);
+      if (error.code === 'auth/unauthorized-domain') {
+        setError('Unauthorized Domain: Please add "afritradexafrica.com" to your Firebase Authorized Domains list in the Firebase Console.');
+      } else if (error.code === 'auth/operation-not-allowed') {
+        setError('Microsoft Login is not enabled. Please enable "Microsoft" in the Firebase Console under Authentication > Sign-in method.');
+      } else {
+        setError('Failed to sign in with Microsoft. Please try again.');
+      }
+      setIsLoggingIn(false);
+      setLoginType(null);
+    }
   };
 
   return (
@@ -41,71 +77,70 @@ export default function Login() {
           <p className="text-soft-grey text-sm">Login to your AfriTradeX Dashboard</p>
         </div>
 
-        <div className="bg-gold/10 border border-gold/20 rounded-lg p-4 mb-8">
-          <p className="text-xs text-gold font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
-            <AlertCircle size={14} /> Sample Credentials
+        <div className="bg-gold/10 border border-gold/20 rounded-lg p-6 mb-10 text-center">
+          <Shield className="text-gold mx-auto mb-4" size={32} />
+          <h3 className="text-lg font-bold mb-2">Secure Authentication</h3>
+          <p className="text-sm text-soft-grey mb-6">
+            We use secure enterprise authentication to protect your mineral trade data and identity.
           </p>
-          <p className="text-sm text-soft-grey">Email: <span className="text-white">admin@afritradex.com</span></p>
-          <p className="text-sm text-soft-grey">Password: <span className="text-white">password123</span></p>
-          <p className="text-xs text-gold mt-2 flex items-center gap-1">
-            <Shield size={10} /> 2FA Code: 123456
-          </p>
+          
+          <div className="space-y-4">
+            <button 
+              onClick={handleGoogleLogin}
+              disabled={isLoggingIn}
+              className="btn-primary w-full py-4 text-lg flex items-center justify-center gap-3 disabled:opacity-50"
+            >
+              {isLoggingIn && loginType === 'google' ? (
+                <Loader2 className="animate-spin" size={20} />
+              ) : (
+                <LogIn size={20} />
+              )}
+              Sign in with Google
+            </button>
+
+            <button 
+              onClick={handleMicrosoftLogin}
+              disabled={isLoggingIn}
+              className="w-full py-4 bg-white text-black hover:bg-white/90 rounded-lg font-bold text-lg flex items-center justify-center gap-3 disabled:opacity-50 transition-all"
+            >
+              {isLoggingIn && loginType === 'microsoft' ? (
+                <Loader2 className="animate-spin" size={20} />
+              ) : (
+                <svg viewBox="0 0 23 23" className="w-5 h-5">
+                  <path fill="#f3f3f3" d="M0 0h23v23H0z"/>
+                  <path fill="#f35325" d="M1 1h10v10H1z"/>
+                  <path fill="#81bc06" d="M12 1h10v10H12z"/>
+                  <path fill="#05a6f0" d="M1 12h10v10H1z"/>
+                  <path fill="#ffba08" d="M12 12h10v10H12z"/>
+                </svg>
+              )}
+              Sign in with Microsoft
+            </button>
+          </div>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-6">
-          <div className="space-y-2">
-            <label className="text-xs text-soft-grey uppercase tracking-widest">Email Address</label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-soft-grey" size={18} />
-              <input 
-                type="email" 
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-jet-black border border-white/10 rounded-lg p-4 pl-12 focus:border-gold outline-none transition-colors" 
-                placeholder="admin@afritradex.com"
-                required
-              />
-            </div>
+        {error && (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg mb-8 flex items-start gap-3 text-red-500">
+            <AlertCircle className="shrink-0 mt-0.5" size={18} />
+            <p className="text-sm font-medium">{error}</p>
           </div>
+        )}
 
-          <div className="space-y-2">
-            <label className="text-xs text-soft-grey uppercase tracking-widest">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-soft-grey" size={18} />
-              <input 
-                type="password" 
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-jet-black border border-white/10 rounded-lg p-4 pl-12 focus:border-gold outline-none transition-colors" 
-                placeholder="••••••••"
-                required
-              />
-            </div>
+        <div className="space-y-4">
+          <div className="flex items-center gap-4">
+            <div className="h-px bg-white/10 flex-grow"></div>
+            <span className="text-xs text-soft-grey uppercase tracking-widest">Help</span>
+            <div className="h-px bg-white/10 flex-grow"></div>
           </div>
-
-          {error && (
-            <p className="text-red-500 text-sm flex items-center gap-2">
-              <AlertCircle size={16} /> {error}
-            </p>
-          )}
-
-          <button type="submit" className="btn-primary w-full py-4 text-lg group">
-            Login to Dashboard
-            <ArrowRight className="group-hover:translate-x-1 transition-transform" />
-          </button>
-        </form>
-
-        <p className="text-center mt-8 text-sm text-soft-grey">
-          Don't have an account? <Link to="/onboarding" className="text-gold hover:underline">Get Started</Link>
-        </p>
+          
+          <p className="text-center text-sm text-soft-grey">
+            Don't have an account? <Link to="/onboarding" className="text-gold hover:underline">Get Started</Link>
+          </p>
+          <p className="text-center text-xs text-soft-grey leading-relaxed">
+            By signing in, you agree to our <Link to="/terms" className="text-gold hover:underline">Terms of Service</Link> and <Link to="/privacy" className="text-gold hover:underline">Privacy Policy</Link>.
+          </p>
+        </div>
       </motion.div>
-
-      <TwoFactorModal 
-        isOpen={is2FAOpen}
-        onClose={() => setIs2FAOpen(false)}
-        onVerify={handle2FAVerify}
-        description="A 6-digit verification code has been sent to your registered mobile device."
-      />
     </div>
   );
 }

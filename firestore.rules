@@ -1,0 +1,158 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required, immutable) - The unique ID of the user.
+    //   - email: string (required, email format) - The user's email address.
+    //   - displayName: string (optional) - The user's display name.
+    //   - role: string (required, enum: ['client', 'admin', 'miner', 'buyer']) - The user's role.
+    //   - kycStatus: string (optional, enum: ['unverified', 'pending', 'verified', 'flagged']) - KYC verification status.
+    //   - createdAt: timestamp (required, immutable) - When the user profile was created.
+    //
+    // Collection: submissions
+    // Document ID: {submissionId}
+    // Fields:
+    //   - uid: string (required, immutable) - The ID of the user who submitted the form.
+    //   - role: string (required, enum: ['miner', 'buyer', 'partner']) - The role selected.
+    //   - fullName: string (required, min: 1, max: 100) - The full name of the applicant.
+    //   - idNumber: string (optional, max: 50) - National ID or Passport number.
+    //   - phone: string (optional, max: 20) - Contact phone number.
+    //   - email: string (required, email format) - Contact email address.
+    //   - address: string (optional, max: 500) - Mining site location or business address.
+    //   - miningLicense: string (optional, max: 50) - Mining license number.
+    //   - cooperativeName: string (optional, max: 100) - Cooperative or company name.
+    //   - mineralType: string (optional, max: 50) - Primary mineral type.
+    //   - status: string (required, enum: ['pending', 'verified', 'rejected']) - The status.
+    //   - createdAt: timestamp (required, immutable) - When the submission was created.
+    //
+    // Collection: trades
+    // Document ID: {tradeId}
+    // Fields:
+    //   - tradeId: string (required, immutable)
+    //   - minerId: string (required)
+    //   - buyerId: string (required)
+    //   - minerName: string (optional)
+    //   - buyerName: string (optional)
+    //   - mineral: string (required)
+    //   - quantity: string (optional)
+    //   - grade: string (optional)
+    //   - amount: number (required)
+    //   - status: string (required, enum: ['Completed', 'In Escrow', 'Pending Testing'])
+    //   - createdAt: timestamp (required, immutable)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          ((request.auth.token.email == "dvd.gondwe9@gmail.com" || request.auth.token.email == "admin@afritradexafrica.com") && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'role', 'createdAt']) &&
+             hasOnlyAllowedFields(['uid', 'email', 'role', 'createdAt', 'displayName', 'kycStatus']) &&
+             data.uid is string &&
+             data.email is string && isValidEmail(data.email) &&
+             data.role in ['client', 'admin', 'miner', 'buyer'] &&
+             (!('kycStatus' in data) || data.kycStatus in ['unverified', 'pending', 'verified', 'flagged']) &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidSubmission(data) {
+      return hasRequiredFields(['uid', 'role', 'fullName', 'email', 'status', 'createdAt']) &&
+             hasOnlyAllowedFields(['uid', 'role', 'fullName', 'idNumber', 'phone', 'email', 'address', 'miningLicense', 'cooperativeName', 'mineralType', 'kycDocumentUrl', 'status', 'createdAt']) &&
+             data.uid is string &&
+             data.role in ['miner', 'buyer', 'partner'] &&
+             data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 100 &&
+             data.email is string && isValidEmail(data.email) &&
+             data.status in ['pending', 'verified', 'rejected'] &&
+             data.createdAt is timestamp &&
+             (!('idNumber' in data) || (data.idNumber is string && data.idNumber.size() <= 50)) &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 20)) &&
+             (!('address' in data) || (data.address is string && data.address.size() <= 500)) &&
+             (!('miningLicense' in data) || (data.miningLicense is string && data.miningLicense.size() <= 50)) &&
+             (!('cooperativeName' in data) || (data.cooperativeName is string && data.cooperativeName.size() <= 100)) &&
+             (!('mineralType' in data) || (data.mineralType is string && data.mineralType.size() <= 50)) &&
+             (!('kycDocumentUrl' in data) || (data.kycDocumentUrl is string && data.kycDocumentUrl.size() <= 2000));
+    }
+
+    function isValidTrade(data) {
+      return hasRequiredFields(['tradeId', 'minerId', 'buyerId', 'mineral', 'amount', 'status', 'createdAt']) &&
+             data.tradeId is string &&
+             data.minerId is string &&
+             data.buyerId is string &&
+             data.mineral is string &&
+             data.amount is number &&
+             data.status in ['Completed', 'In Escrow', 'Pending Testing'] &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == 'client';
+      allow update: if (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.role == resource.data.role && areImmutableFieldsUnchanged(['uid', 'createdAt'])) || isAdmin();
+    }
+
+    match /submissions/{submissionId} {
+      allow read: if isAuthenticated() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidSubmission(request.resource.data) && request.resource.data.uid == request.auth.uid && request.resource.data.status == 'pending';
+      allow update: if isAdmin() && isValidSubmission(request.resource.data) && areImmutableFieldsUnchanged(['uid', 'createdAt']);
+      allow delete: if isAdmin();
+    }
+
+    match /trades/{tradeId} {
+      allow read: if isAuthenticated() && (resource.data.minerId == request.auth.uid || resource.data.buyerId == request.auth.uid || isAdmin());
+      allow create: if isAdmin() && isValidTrade(request.resource.data);
+      allow update: if isAdmin() && isValidTrade(request.resource.data) && areImmutableFieldsUnchanged(['tradeId', 'createdAt']);
+      allow delete: if isAdmin();
+    }
+
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

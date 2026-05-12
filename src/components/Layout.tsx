@@ -1,9 +1,11 @@
 import { ReactNode } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, ChevronRight, Mail, Phone, MapPin, Linkedin, Twitter, Facebook } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Menu, X, ChevronRight, Mail, Phone, MapPin, Linkedin, Twitter, Facebook, LogOut, User as UserIcon, LayoutDashboard } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Logo from './Logo';
+import { useFirebase } from '../contexts/FirebaseContext';
+import { auth, signOut } from '../firebase';
 
 interface LayoutProps {
   children: ReactNode;
@@ -23,50 +25,96 @@ const navLinks = [
 
 export default function Layout({ children }: LayoutProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, isAdmin: contextIsAdmin } = useFirebase();
+  const isAdmin = contextIsAdmin || (user?.email?.toLowerCase().trim() === 'admin@afritradexafrica.com') || (user?.email?.toLowerCase().trim() === 'dvd.gondwe9@gmail.com');
   const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     window.scrollTo(0, 0);
     setIsMenuOpen(false);
   }, [location.pathname]);
 
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate('/');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-jet-black/80 backdrop-blur-lg border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <Link to="/">
-            <Logo />
-          </Link>
-
-          {/* Desktop Nav */}
-          <nav className="hidden md:flex items-center gap-6 lg:gap-8">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                to={link.href}
-                className={`text-xs lg:text-sm font-medium transition-colors hover:text-gold ${
-                  location.pathname === link.href ? 'text-gold' : 'text-soft-grey'
-                }`}
-              >
-                {link.name}
-              </Link>
-            ))}
-            <Link to="/login" className="text-sm font-bold text-gold hover:text-white transition-colors">
-              Login
+          <div className="flex items-center gap-8 lg:gap-12">
+            <Link to="/">
+              <Logo showText={false} />
             </Link>
-            <Link to="/onboarding" className="btn-primary py-2 px-4 text-xs lg:text-sm">
-              Get Started
-            </Link>
-          </nav>
 
-          {/* Mobile Menu Toggle */}
-          <button
-            className="md:hidden text-white"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-          >
-            {isMenuOpen ? <X /> : <Menu />}
-          </button>
+            {/* Desktop Nav Links */}
+            <nav className="hidden md:flex items-center gap-6 lg:gap-8">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  to={link.href}
+                  className={`text-xs lg:text-sm font-medium transition-colors hover:text-gold ${
+                    location.pathname === link.href ? 'text-gold' : 'text-soft-grey'
+                  }`}
+                >
+                  {link.name}
+                </Link>
+              ))}
+            </nav>
+          </div>
+
+          {/* Right Side: Auth & Mobile Toggle */}
+          <div className="flex items-center gap-6 lg:gap-8">
+            <div className="hidden md:flex items-center gap-6 lg:gap-8">
+              {user ? (
+                <div className="flex items-center gap-4 border-l border-white/10 pl-6">
+                  {isAdmin && (
+                    <Link to="/admin" className="text-soft-grey hover:text-gold transition-colors flex items-center gap-2">
+                      <LayoutDashboard size={18} />
+                      <span className="text-xs font-bold uppercase tracking-widest">Admin</span>
+                    </Link>
+                  )}
+                  <div className="flex items-center gap-2 text-white">
+                    <div className="w-8 h-8 rounded-full bg-gold/10 flex items-center justify-center text-gold border border-gold/20">
+                      <UserIcon size={16} />
+                    </div>
+                    <span className="text-xs font-bold max-w-[100px] truncate">{user.displayName || user.email}</span>
+                  </div>
+                  <button 
+                    onClick={handleLogout}
+                    className="text-soft-grey hover:text-red-500 transition-colors"
+                    title="Logout"
+                  >
+                    <LogOut size={18} />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <Link to="/login" className="text-sm font-bold text-gold hover:text-white transition-colors">
+                    Login
+                  </Link>
+                  <Link to="/onboarding" className="btn-primary py-2 px-4 text-xs lg:text-sm">
+                    Get Started
+                  </Link>
+                </>
+              )}
+            </div>
+
+            {/* Mobile Menu Toggle */}
+            <button
+              className="md:hidden text-white"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+            >
+              {isMenuOpen ? <X /> : <Menu />}
+            </button>
+          </div>
         </div>
 
         {/* Mobile Nav */}
@@ -90,12 +138,40 @@ export default function Layout({ children }: LayoutProps) {
                     {link.name}
                   </Link>
                 ))}
-                <Link to="/onboarding" className="btn-primary w-full mt-4">
-                  Get Started
-                </Link>
-                <Link to="/login" className="btn-secondary w-full">
-                  Login to Dashboard
-                </Link>
+                
+                {user ? (
+                  <div className="space-y-4 pt-4 border-t border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gold/10 flex items-center justify-center text-gold">
+                        <UserIcon size={20} />
+                      </div>
+                      <div>
+                        <p className="text-white font-bold">{user.displayName || 'User'}</p>
+                        <p className="text-xs text-soft-grey">{user.email}</p>
+                      </div>
+                    </div>
+                    {isAdmin && (
+                      <Link to="/admin" className="btn-secondary w-full flex items-center justify-center gap-2">
+                        <LayoutDashboard size={18} /> Admin Dashboard
+                      </Link>
+                    )}
+                    <button 
+                      onClick={handleLogout}
+                      className="btn-secondary w-full text-red-500 border-red-500/20 hover:bg-red-500/10 flex items-center justify-center gap-2"
+                    >
+                      <LogOut size={18} /> Logout
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <Link to="/onboarding" className="btn-primary w-full mt-4">
+                      Get Started
+                    </Link>
+                    <Link to="/login" className="btn-secondary w-full">
+                      Login to Dashboard
+                    </Link>
+                  </>
+                )}
               </div>
             </motion.div>
           )}
@@ -112,7 +188,7 @@ export default function Layout({ children }: LayoutProps) {
         <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12 text-center sm:text-left">
           <div className="space-y-6 flex flex-col items-center sm:items-start">
             <Link to="/">
-              <Logo className="w-8 h-8" iconSize={20} />
+              <Logo className="w-8 h-8" iconSize={20} showText={false} />
             </Link>
             <p className="text-soft-grey text-sm leading-relaxed max-w-xs">
               Formalising Africa’s hidden mineral economy through digital settlement, ethical sourcing, and safer trade for artisanal miners.
@@ -166,7 +242,7 @@ export default function Layout({ children }: LayoutProps) {
               </li>
               <li className="flex items-center gap-3 text-sm text-soft-grey justify-center sm:justify-start">
                 <Mail size={18} className="text-gold shrink-0" />
-                <span className="break-all">gondmachomineralsz@gmail.com</span>
+                <span className="break-all">info@afritradexafrica.com</span>
               </li>
             </ul>
           </div>

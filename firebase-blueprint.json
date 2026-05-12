@@ -1,0 +1,71 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user profile information and roles.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID of the user." },
+        "email": { "type": "string", "format": "email", "description": "The user's email address." },
+        "displayName": { "type": "string", "description": "The user's display name." },
+        "role": { "type": "string", "enum": ["client", "admin"], "description": "The user's role in the system." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the user profile was created." }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "OnboardingSubmission": {
+      "title": "Onboarding Submission",
+      "description": "Stores onboarding data submitted by miners and buyers.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The ID of the user who submitted the form." },
+        "role": { "type": "string", "enum": ["miner", "buyer", "partner"], "description": "The role selected during onboarding." },
+        "fullName": { "type": "string", "description": "The full name of the applicant." },
+        "idNumber": { "type": "string", "description": "National ID or Passport number." },
+        "phone": { "type": "string", "description": "Contact phone number." },
+        "email": { "type": "string", "format": "email", "description": "Contact email address." },
+        "address": { "type": "string", "description": "Mining site location or business address." },
+        "miningLicense": { "type": "string", "description": "Mining license number." },
+        "cooperativeName": { "type": "string", "description": "Cooperative or company name." },
+        "mineralType": { "type": "string", "description": "Primary mineral type." },
+        "kycDocumentUrl": { "type": "string", "format": "uri", "description": "The URL to the uploaded KYC document in Firebase Storage." },
+        "status": { "type": "string", "enum": ["pending", "verified", "rejected"], "description": "The status of the application." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the submission was created." }
+      },
+      "required": ["uid", "role", "fullName", "email", "status", "createdAt"]
+    },
+    "Trade": {
+      "title": "Mineral Trade Settlement",
+      "description": "Stores trade settlement data between miners and buyers.",
+      "type": "object",
+      "properties": {
+        "tradeId": { "type": "string", "description": "The unique ID of the trade." },
+        "minerId": { "type": "string", "description": "The ID of the miner/coop." },
+        "buyerId": { "type": "string", "description": "The ID of the buyer." },
+        "minerName": { "type": "string", "description": "The name of the miner/coop." },
+        "buyerName": { "type": "string", "description": "The name of the buyer." },
+        "mineral": { "type": "string", "description": "The mineral type." },
+        "quantity": { "type": "string", "description": "The quantity of the mineral." },
+        "grade": { "type": "string", "description": "The grade of the mineral." },
+        "amount": { "type": "number", "description": "The total amount of the trade." },
+        "status": { "type": "string", "enum": ["Completed", "In Escrow", "Pending Testing"], "description": "The status of the trade." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the trade was created." }
+      },
+      "required": ["tradeId", "minerId", "buyerId", "mineral", "amount", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents."
+    },
+    "/submissions/{submissionId}": {
+      "schema": "OnboardingSubmission",
+      "description": "Onboarding application documents."
+    },
+    "/trades/{tradeId}": {
+      "schema": "Trade",
+      "description": "Trade settlement documents."
+    }
+  }
+}
